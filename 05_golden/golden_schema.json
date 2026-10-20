@@ -1,0 +1,24 @@
+{
+  "_note": "골든셋 형식 (기획서 7장). 한 줄에 문항 하나(JSONL)로 05_golden/golden_set.jsonl 에 사람이 작성한다. 이 파일은 필드 설명만 담고 내용은 비어 있다. 질문·기준 답안은 검색 DB 에 넣지 않는다.",
+  "required": {
+    "case_id": "예: GOLD-A01 (A/B/C = 작성자)",
+    "question": "질문",
+    "reference_answer": "기준 답안",
+    "expected_behavior": "answer / answer_qualified / correct / clarify / abstain / defer_freshness / refuse (또는 03_answers 의 22종 값)",
+    "scope": "검색 범위 doc_type 목록. 문항마다 정함. glossary | terms | life_guide | additional"
+  },
+  "optional": {
+    "set": "golden (기본값)",
+    "category": "정의 | 조건 비교 | 표·차트 해석 | 여러 조항 | 답변 불가",
+    "must_include": "답에 꼭 들어갈 내용 목록 (20자 미만은 규칙 채점, 긴 문장은 AI 채점)",
+    "must_not_include": "답에 들어가면 안 되는 내용 목록",
+    "expected_source_ids": "정답 근거 ID 목록 (docs/기획서.md 1장 ID 규칙). 답변 불가 문항은 빈 목록",
+    "expected_pages": "[{\"file\": \"파일명.pdf\", \"page\": 12}] 쪽 기준 채점용 (PDF 쪽 순서 1부터)",
+    "evidence_quote": "근거 구절 (원문 그대로)",
+    "source_file": "파일명",
+    "source_pages": "[PDF 쪽 순서]",
+    "unanswerable_reason": "답변 불가 문항: 왜 문서만으로 답할 수 없는지",
+    "author": "작성자",
+    "reviewer": "검수자 (작성자와 달라야 함)"
+  }
+}
