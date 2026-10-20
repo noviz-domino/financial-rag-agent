@@ -75,7 +75,7 @@
 | 5-4 제목 접두어 | `embed_text` 에만 `[문서명 > 제목]` | 측정 | 기본 H@1 0.583 → 0.633, 가이드는 −1문항 | text는 그대로라 효과만 분리 | BM25에선 구별력이 약함 → **벡터에서 확인** | – |
 | 5-5 Parent-Child | parent: 조항 전체·반쪽 페이지 / child: 항·섹션·표·그림 (≤400자) | 측정 | 청크 2,454 (text 2,081, table 59, figure 314) | 72쪽처럼 그림 밖 예외 문장도 parent로 같이 넘어감 | parent 길이 | – |
 | 5-6 링크 | prev/next, 조항 참조(98개), 그림 참조(102개, 전부 정확) | 측정 | – | **Agent가 링크를 따라가는 도구**로 쓸 수 있음 | – | – |
-| 5-7 로더별 청킹 | 같은 청킹 규칙에 로더만 v2 / pymupdf4llm / v3 로 바꿔 비교 | 계산 중 | `data/chunks/loader_compare/` | 로더 효과만 분리 | 결과 나오면 이 칸 갱신 | – |
+| 5-7 로더별 청킹 | 같은 청킹 규칙에 로더만 v2 / pymupdf4llm / v3 로 바꿔 비교 → **점수로는 차이 없음, v3 채택 제안(표 품질·비용 이유)** | 측정 | 가이드 H@5 (v2 / p4l / v3): structural 0.90 / 0.90 / 0.90 · parentchild[parent] 0.95 / 0.95 / **1.00** · 추가 H@5: structural 0.900 / 0.917 / 0.900 · parentchild[parent] 0.850 / 0.867 / 0.850. LLM 입력 글자(parent): 13,022 / **22,028** / 12,911 | v3는 점수 유지 + lossy 표 134→33 (Gemini 호출 감소) | 차이가 1~2문항이라 BM25로는 결론 불가 → 임베딩·답변 단계(E4)에서 재확인. recursive_500 은 v3에서 추가 MRR 0.748 → 0.702 (원인 미확인) | pymupdf4llm 단독은 펼침면을 안 나눠 parent가 커짐(토큰 비용 ↑) |
 
 **팀원 청크 비교 제안**: jjh7757의 `structured.jsonl` 도 `source_ids` 필드만 붙이면 내 `check_chunks` 로 같은 표에서 비교할 수 있어요(필드 매핑: `kind`→`content_type`, `group`→`doc_type`).
 
