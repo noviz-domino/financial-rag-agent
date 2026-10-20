@@ -35,7 +35,8 @@ def load_config(path) -> dict:
     p = Path(path)
     if p.resolve() == BASELINE_PATH.resolve():
         return base
-    return deep_merge(base, read_json(p))
+    over = {k: v for k, v in read_json(p).items() if not k.startswith("_")}
+    return deep_merge(base, over)
 
 
 def diff_config(cfg: dict, base: dict | None = None, _prefix="") -> dict:
@@ -43,7 +44,7 @@ def diff_config(cfg: dict, base: dict | None = None, _prefix="") -> dict:
     base = base if base is not None else read_json(BASELINE_PATH)
     out = {}
     for k in sorted(set(cfg) | set(base)):
-        if k in ("description",):
+        if k in ("description", "exp_id"):
             continue
         a, b = base.get(k), cfg.get(k)
         key = f"{_prefix}{k}"
