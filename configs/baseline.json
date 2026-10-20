@@ -1,0 +1,16 @@
+{
+  "exp_id": "baseline",
+  "description": "기준 설정: 구조형 청킹 + 하이브리드 k=5 + text 임베딩 + 기본 RAG(flash, temp 0)",
+  "pipeline": "rag",
+  "paths": {"data": "data", "runs": "runs", "questions": "02_questions", "answers": "03_answers", "golden": "05_golden/golden_set.jsonl"},
+  "loading": {"spread_ratio": 1.15, "superscript_ratio": 0.65, "repeat_ratio": 0.3, "repeat_edge_lines": 3},
+  "tables": {"loss_threshold": 0.9, "max_chars": 1200},
+  "figures": {"enabled": true, "ocr_engine": "winocr", "ocr_scale": 2.0, "dpi": 150, "max_output_chars": 4000,
+              "min_area_ratio": 0.02, "model": "gemini-2.5-flash"},
+  "chunking": {"strategy": "structural", "max_chars": 1200, "short_min": 100, "size": 500, "overlap": 50, "child_max": 400},
+  "retrieval": {"mode": "hybrid", "k": 5, "rrf_k": 60, "fetch_k": 20, "embed_model": "gemini-embedding-001",
+                "embed_dim": 768, "embed_field": "text", "parent_fold": false},
+  "llm": {"model": "gemini-2.5-flash", "temperature": 0, "judge_model": "gemini-2.5-pro", "max_output_tokens": 2048},
+  "agent": {"max_retrieval_retries": 2, "max_regenerate": 1, "max_llm_calls": 8, "expand": false},
+  "evaluation": {"sets": ["positive", "negative", "life_guide", "additional"], "short_item_chars": 20}
+}
