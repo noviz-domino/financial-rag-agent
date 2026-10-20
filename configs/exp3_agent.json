@@ -1,0 +1,6 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp3_agent",
+  "description": "실험 3 RAG vs Agent: 흐름만 Agent 그래프로 (검색·AI 는 같게)",
+  "pipeline": "agent"
+}

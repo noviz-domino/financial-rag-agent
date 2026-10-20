@@ -1,0 +1,5 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp0_repeat",
+  "description": "실험 0 흔들림 재기: 기준을 같은 조건으로 한 번 더 (baseline 과 비교)"
+}

@@ -1,0 +1,10 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp1a_recursive_500_50",
+  "description": "실험 1a 청킹: 구조형 → 글자 수 자르기(500자, 겹침 50)",
+  "chunking": {
+    "strategy": "recursive",
+    "size": 500,
+    "overlap": 50
+  }
+}
