@@ -74,7 +74,7 @@ def length_flag(desc: str, max_chars: int) -> str | None:
     return None
 
 
-def describe_figure(client, model: str, fig: dict, max_chars: int = 4000, max_tokens: int = 4096) -> dict:
+def describe_figure(client, model: str, fig: dict, max_chars: int = 4000, max_tokens: int = 8192) -> dict:
     """그림 1개 → {kind, description, tokens...}. 호출은 캐시(이미지 해시+프롬프트+모델)됨."""
     prompt = PROMPT.format(max_chars=max_chars, caption=fig.get("caption") or "없음",
                            ocr=(fig.get("ocr_text") or "없음")[:600].replace("\n", " "))

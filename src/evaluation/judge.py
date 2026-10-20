@@ -13,7 +13,7 @@ def score_answer(client, cfg: dict, case: dict, answer: str, retrieved: list[dic
                                    answer=answer or "(빈 답변)", must_include=ai_include or "(없음)",
                                    must_not=ai_not or "(없음)", context=ctx_text)
     with use_meter() as m:
-        r = client.call("score", cfg["llm"]["judge_model"], prompt, temperature=0, max_tokens=2048,
+        r = client.call("score", cfg["llm"]["judge_model"], prompt, temperature=0, max_tokens=cfg["llm"].get("max_output_tokens", 8192),
                         ctx={"answer": answer, "must_include_ai": ai_include, "must_not_ai": ai_not})
     d = r.data if isinstance(r.data, dict) else {}
     try:
