@@ -91,6 +91,20 @@ python -m src.evaluation.run --config configs/exp3_agent.json --sets positive,ne
 
 > Gemini 응답·임베딩은 `data/cache/`에 저장돼서 **같은 내용은 다시 돌려도 비용이 들지 않아요.** 청크 글자가 한 글자라도 바뀌면 그 청크만 새로 임베딩해요.
 
+### 임베딩·캐시를 팀이 같이 쓰기 (비용을 다시 내지 않으려면)
+처음 빌드(그림 설명 약 40분 + 임베딩)는 한 사람이 한 번만 하고, 나머지는 결과물을 받아서 써요.
+```bash
+# 만든 사람: data/ 의 캐시·색인·청크·그림 설명을 zip 으로 묶기 (dist/ 는 git 에 안 올라가요, 파일 하나 최대 1.9GB 로 자동 분할)
+python -m src.pipeline.artifacts export --tag baseline
+#   → 끝에 GitHub Release 로 올리는 명령이 그대로 출력돼요 (직접 실행해야 올라가요):
+#   gh release create data-v1 dist/artifacts_YYYYMMDD-HHMM_baseline_part01.zip ... --title "..." --notes "..."
+
+# 받는 사람: Release 에서 zip 을 모두 받아 dist/ 에 두고
+gh release download data-v1 --dir dist            # (또는 웹에서 내려받기)
+python -m src.pipeline.artifacts import dist/artifacts_*_part*.zip --config configs/baseline.json
+```
+`import` 는 묶음의 `manifest.json` 으로 **낡았는지 확인**해요: 파일 손상(sha256), part 누락, 원본 PDF 변경, 현재 설정의 청킹·임베딩 모델 색인이 묶음에 없음, 그림·표 설정 변경. 하나라도 걸리면 이유를 보여 주고 멈추며, 그래도 풀려면 `--force`. 풀고 나서 `build --reuse` 를 다시 돌려도 새 임베딩 호출이 **0번**이어야 해요(캐시 적중).
+
 ---
 
 ## 2. 전체 흐름
