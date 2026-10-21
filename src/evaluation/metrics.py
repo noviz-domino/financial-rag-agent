@@ -12,8 +12,27 @@ import re
 from collections import Counter
 
 PUNCT = re.compile(r"[\s,.;:!?·ㆍ'\"“”‘’()\[\]{}<>~\-_/\\|*]+")
-CITE_RE = re.compile(r"\(\s*([^()\n]+?\.pdf)\s*p\.?\s*(\d+)\s*\)")
 NUM_RE = re.compile(r"\d[\d,]*\.?\d*")
+# 출처 괄호: AI 가 '.pdf' 를 빼거나 '(a p.2, b.pdf p.3)' 처럼 여러 개를 한 괄호에 쓰는 경우까지 (F14)
+CITE_GROUP_RE = re.compile(r"\(([^()\n]*\bp\.?\s*\d+[^()\n]*)\)")
+CITE_ITEM_RE = re.compile(r"^\s*(\S[^,;]*?)\s*p\.?\s*(\d+)\s*$")
+
+
+def _pdf_name(name: str) -> str:
+    name = name.strip()
+    return name if name.lower().endswith(".pdf") else name + ".pdf"
+
+
+def _cite_groups(answer: str):
+    """본문의 출처 괄호마다 (span, [(파일, 쪽)]). 파일 이름처럼 보이는 것('.pdf' 나 '_' 포함)만 출처로 본다."""
+    for m in CITE_GROUP_RE.finditer(answer or ""):
+        items = []
+        for part in re.split(r"[,;]", m.group(1)):
+            im = CITE_ITEM_RE.match(part)
+            if im and (".pdf" in im.group(1).lower() or "_" in im.group(1)):
+                items.append((_pdf_name(im.group(1)), int(im.group(2))))
+        if items:
+            yield m.span(), items
 
 
 def norm_text(s: str) -> str:
@@ -77,9 +96,9 @@ def parse_citations(answer: str, citations: list[dict]) -> list[tuple]:
     """(파일, 쪽) 목록: 답변 JSON 의 citations + 본문 '(파일명 p.N)' 표기, 중복 제거."""
     out = []
     for c in citations or []:
-        out.append((c["file"], int(c["page"])))
-    for m in CITE_RE.finditer(answer or ""):
-        out.append((m.group(1).strip(), int(m.group(2))))
+        out.append((_pdf_name(c["file"]), int(c["page"])))
+    for _, items in _cite_groups(answer):
+        out.extend(items)
     return list(dict.fromkeys(out))
 
 
@@ -94,8 +113,10 @@ def citation_metrics(cites: list[tuple], retrieved: list[dict], exp_pages: set) 
 
 
 def unsupported_numbers(answer: str, context: str, question: str = "") -> list[str]:
-    """답변 속 숫자 중 근거 글(과 질문)에 없는 것 — 환각 규칙 검사. 쪽 번호 표기 'p.N' 은 제외."""
-    body = CITE_RE.sub("", answer or "")
+    """답변 속 숫자 중 근거 글(과 질문)에 없는 것 — 환각 규칙 검사. 출처 괄호(파일명 앞 번호 포함)와 'p.N' 은 제외."""
+    body = answer or ""
+    for (s, e), _ in reversed(list(_cite_groups(body))):
+        body = body[:s] + body[e:]
     body = re.sub(r"\bp\.\s*\d+", "", body)
     ref = {re.sub(r"[,.]", "", n) for n in NUM_RE.findall((context or "") + " " + (question or ""))}
     out = []

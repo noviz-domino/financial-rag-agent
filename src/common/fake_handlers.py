@@ -35,20 +35,17 @@ def judge(ctx):
             "missing_info": "" if res else "근거 없음", "reason": "fake judge"}
 
 
-def route(ctx):
-    q = ctx["question"]
-    out = judge({"question": q, "results": [{"chunk_id": "x"}]})
-    out["use_chunk_ids"] = []
-    return out
-
-
 def grade(ctx):
+    """judge 와 같은 판단 + 질문 단어가 검색 결과에 하나라도 있으면 근거 충분."""
     res = ctx.get("results", [])
-    q_terms = set(re.findall(r"[가-힣A-Za-z0-9]{2,}", ctx["question"]))
+    out = judge(ctx)
+    q_terms = set(re.findall(r"[가-힣A-Za-z0-9]{2,}", out["clean_query"] or ctx["question"]))
     hit = sum(1 for r in res if q_terms & set(re.findall(r"[가-힣A-Za-z0-9]{2,}", r["text"])))
-    ok = bool(res) and hit >= 1
-    return {"sufficient": ok, "link_hint": False, "missing_info": "" if ok else "관련 근거 없음",
-            "use_chunk_ids": [r["chunk_id"] for r in res[:3]], "reason": "fake grade"}
+    ok = out["behavior"] == "answer" and hit >= 1
+    if out["behavior"] == "answer" and not ok:
+        out["behavior"] = "abstain"
+    return {**out, "sufficient": ok, "link_hint": False, "missing_info": "" if ok else "관련 근거 없음",
+            "reason": "fake grade"}
 
 
 def rewrite(ctx):
@@ -84,5 +81,5 @@ def figure(ctx):
     return {"kind": "numeric_chart" if text else "decorative", "description": text}
 
 
-DEFAULT_HANDLERS = {"judge": judge, "route": route, "grade": grade, "rewrite": rewrite, "answer": answer,
+DEFAULT_HANDLERS = {"judge": judge, "grade": grade, "rewrite": rewrite, "answer": answer,
                     "score": score, "figure": figure}

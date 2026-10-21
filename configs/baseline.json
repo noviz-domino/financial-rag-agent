@@ -11,6 +11,6 @@
   "retrieval": {"mode": "hybrid", "k": 5, "rrf_k": 60, "fetch_k": 20, "embed_model": "gemini-embedding-001",
                 "embed_dim": 768, "embed_field": "text", "parent_fold": false},
   "llm": {"model": "gemini-2.5-flash", "temperature": 0, "judge_model": "gemini-2.5-pro", "max_output_tokens": 8192},
-  "agent": {"max_retrieval_retries": 2, "max_regenerate": 1, "max_llm_calls": 8, "expand": false},
+  "agent": {"max_retrieval_retries": 2, "max_regenerate": 1, "max_llm_calls": 7, "expand": false},
   "evaluation": {"sets": ["positive", "negative", "life_guide", "additional"], "short_item_chars": 20}
 }

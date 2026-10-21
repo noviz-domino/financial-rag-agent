@@ -65,6 +65,25 @@ def test_unsupported_numbers_ignores_page_refs():
     assert M.unsupported_numbers("한도 700만원", "연 600만원까지") == ["700"]
 
 
+def test_citations_without_pdf_or_grouped():
+    """F14: AI 가 '.pdf' 를 빼거나 한 괄호에 여러 출처를 쓰면 파일명 앞 번호(07·08)가 '근거에 없는 숫자'로 잡혀
+    Agent verify 가 정상 답변을 abstain 으로 바꿨다 (시험 평가 POS052·057·060)."""
+    ans = ("환매차액은 매입가에 이율을 곱한 금액입니다 (08_기관간환매조건부매매약관 p.2, 07_대고객환매조건부매매약관 p.1). "
+           "산식은 조건부매수 가격 × {1 + 약정일수/365} 입니다 (07_대고객환매조건부매매약관.pdf p.1)")
+    assert M.parse_citations(ans, []) == [("08_기관간환매조건부매매약관.pdf", 2), ("07_대고객환매조건부매매약관.pdf", 1)]
+    assert M.unsupported_numbers(ans, "경과일수를 365로 나눈다") == []
+    assert M.parse_citations("x", [{"file": "a", "page": 3}]) == [("a.pdf", 3)]          # JSON citations 도 같게
+    # 출처가 아닌 괄호의 숫자는 그대로 검사
+    assert M.unsupported_numbers("(제5조 2항) 한도 700만원 (a.pdf p.1)", "제5조 2항 한도 600만원") == ["700"]
+    assert M.parse_citations("(참고 p.3)", []) == []                                       # 파일 이름이 아니면 출처 아님
+
+
+def test_verify_passes_answer_citing_without_pdf():
+    from src.agent.verify import verify_answer
+    ctx = [{"file": "07_대고객환매조건부매매약관.pdf", "pages": [1], "text": "약정일수를 365로 나눈다"}]
+    assert verify_answer("365로 나눠요 (07_대고객환매조건부매매약관 p.1)", "answer", [], ctx) == []
+
+
 @pytest.mark.parametrize("m,want", [
     ({"expected5": "answer", "pred5": "answer", "id_hit5": 0.0, "score": 2}, "retrieval_fail"),
     ({"expected5": "answer", "pred5": "abstain", "id_hit5": 1.0, "score": 0}, "wrong_refusal"),

@@ -98,6 +98,11 @@ def test_schema_validation():
         parse_answer({"answer": "x", "behavior": "answer", "citations": [{"file": "a.pdf"}]})
     a = parse_answer({"answer": "x", "behavior": "refuse", "citations": [{"file": "a.pdf", "page": "3"}]})
     assert a["citations"][0]["page"] == 3
+    for page in ("8,9", "8-9", "p.8", [8, 9]):                 # F15: 여러 쪽이면 첫 쪽 (예전엔 ValueError 로 문항 오류)
+        a = parse_answer({"answer": "x", "behavior": "answer", "citations": [{"file": "a.pdf", "page": page}]})
+        assert a["citations"][0]["page"] == 8
+    with pytest.raises(SchemaError):                            # 숫자가 없으면 형식 오류 → 안전하게 처리
+        parse_answer({"answer": "x", "behavior": "answer", "citations": [{"file": "a.pdf", "page": "없음"}]})
     c = mk_chunk("c", "a.pdf", "terms", "t")
     assert check_chunk(c)
     bad = dict(c)
