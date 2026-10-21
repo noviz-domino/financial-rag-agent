@@ -200,10 +200,13 @@ runs/experiments.jsonl        실험 목록
 |---|---|---|
 | 기준 | `baseline.json` | 구조형 청킹 · 하이브리드 k=5 · 기본 RAG |
 | 0 흔들림 | `exp0_repeat.json` | 기준을 한 번 더 (이 차이보다 작으면 "효과 없음") |
-| 1a 청킹 | `exp1a_recursive_500_50.json` | 글자 수 자르기 (500자, 겹침 50) |
-| 1b 청킹 | `exp1b_parentchild.json` | parent-child (child 400자로 찾고 parent로 묶음) |
+| 1a 청킹 | `exp1a_recursive_{300,500,800}_100.json` | 글자 수 자르기 (300/500/800자, 겹침 100) |
+| 1s 청킹 | `exp1s_structural_{800,1600}.json` | 구조형 항 묶음 최대 글자 수 (기준 1200) |
+| 1b 청킹 | `exp1b_parentchild_{300,400,600}.json` | parent-child (child 300/400/600자로 찾고 parent로 묶음) |
 | 2a 검색 | `exp2a_vector.json` | 뜻 검색(벡터)만 |
 | 2b 검색 | `exp2b_bm25.json` | 단어 검색(BM25)만 |
+| 5 개수 | `exp5_k{3,4}.json` | 검색 개수 k=3 / 4 (기준 5) |
+| 6 임베딩 | `exp6_embed2.json` | gemini-embedding-001 → gemini-embedding-2 |
 | 3 구조 | `exp3_agent.json` | 기본 RAG → Agent |
 | 4 문맥 | `exp4_embed_prefix.json` | 임베딩에 `[문서 > 장 > 절]` 붙이기 |
 | 마지막 | – | 설정 확정 후 골든셋으로 1번 |

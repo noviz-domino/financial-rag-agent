@@ -1,0 +1,8 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp6_embed2",
+  "description": "임베딩 모델: gemini-embedding-001 → gemini-embedding-2 (같은 768차원, task_type 대신 본문 지시문)",
+  "retrieval": {
+    "embed_model": "gemini-embedding-2"
+  }
+}

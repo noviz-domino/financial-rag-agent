@@ -1,10 +1,10 @@
 {
   "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
-  "exp_id": "exp1b_parentchild",
-  "description": "실험 1b 청킹: 구조형 → parent 펼치기 (child 400자 검색, parent 로 접어 전달)",
+  "exp_id": "exp1b_parentchild_600",
+  "description": "청킹: parent 펼치기 (child 600자 검색, parent 로 접어 전달)",
   "chunking": {
     "strategy": "parentchild",
-    "child_max": 400
+    "child_max": 600
   },
   "retrieval": {
     "parent_fold": true

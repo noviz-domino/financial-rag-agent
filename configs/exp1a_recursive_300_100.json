@@ -1,0 +1,10 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp1a_recursive_300_100",
+  "description": "청킹: 구조형 → 글자 수 자르기(300자, 겹침 100)",
+  "chunking": {
+    "strategy": "recursive",
+    "size": 300,
+    "overlap": 100
+  }
+}

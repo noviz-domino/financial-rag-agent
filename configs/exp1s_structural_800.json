@@ -1,0 +1,8 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp1s_structural_800",
+  "description": "청킹: 구조형 항 묶음 최대 800자 (기준 1200)",
+  "chunking": {
+    "max_chars": 800
+  }
+}

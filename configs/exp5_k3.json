@@ -1,0 +1,8 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp5_k3",
+  "description": "검색 개수 k=3 (기준 5)",
+  "retrieval": {
+    "k": 3
+  }
+}
