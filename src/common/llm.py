@@ -141,13 +141,22 @@ class GeminiBackend:
 
     def embed(self, model, texts, dim, task_type):
         from google.genai import types
+        if embed_uses_instruction(model):
+            # gemini-embedding-2: (1) task_type 을 무시하므로(실측) 본문 앞 지시문으로 대신하고,
+            # (2) contents 에 여러 개를 넣으면 하나로 합친 벡터 1개만 돌려주므로(실측) 텍스트마다 호출한다.
+            cfg = types.EmbedContentConfig(output_dimensionality=dim)
+
+            def one(t):
+                r = self._client.models.embed_content(model=model, contents=embed_instruction(model, task_type, t),
+                                                      config=cfg)
+                return r.embeddings[0].values
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=8) as ex:
+                return list(ex.map(one, texts))
         out = []
-        uses_instruction = embed_uses_instruction(model)
+        cfg = types.EmbedContentConfig(task_type=task_type, output_dimensionality=dim)
         for i in range(0, len(texts), 100):
-            part = [embed_instruction(model, task_type, t) for t in texts[i:i + 100]]
-            # gemini-embedding-2 는 task_type 을 무시한다(실측: 있어도 없어도 벡터 동일) → 본문 앞 지시문으로 대신한다.
-            cfg = types.EmbedContentConfig(output_dimensionality=dim) if uses_instruction else                 types.EmbedContentConfig(task_type=task_type, output_dimensionality=dim)
-            r = self._client.models.embed_content(model=model, contents=part, config=cfg)
+            r = self._client.models.embed_content(model=model, contents=texts[i:i + 100], config=cfg)
             out += [e.values for e in r.embeddings]
         return out
 
@@ -274,6 +283,8 @@ class CachedClient:
             for attempt in range(self.retries + 1):
                 try:
                     vecs = self.backend.embed(model, [t for _, t in batch], dim, task_type)
+                    if len(vecs) != len(batch):
+                        raise LLMError(f"임베딩 개수가 달라요: 요청 {len(batch)} 응답 {len(vecs)} ({model})")
                     break
                 except Exception as e:  # noqa: BLE001
                     if attempt < self.retries and any(k in f"{type(e).__name__} {e}" for k in RETRYABLE):

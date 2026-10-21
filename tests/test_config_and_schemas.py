@@ -167,3 +167,14 @@ def test_real_backend_requires_key(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     with pytest.raises(LLMError):
         GeminiBackend()
+
+
+def test_embedding_count_mismatch_is_an_error(tmp_path):
+    class Bad(FakeBackend):
+        cacheable = False
+
+        def embed(self, model, texts, dim, task_type):      # gemini-embedding-2 가 여러 입력을 하나로 합쳐 돌려주던 상황
+            return [[1.0] * dim]
+    c = CachedClient(Bad(), tmp_path, retries=0, sleep=lambda s: None)
+    with pytest.raises(LLMError):
+        c.embed(["가", "나", "다"], "m", 8)
