@@ -126,7 +126,7 @@ python -m src.pipeline.artifacts import dist/artifacts_*_part*.zip --config conf
                  → 청킹(용어·조항·제목 단위) → 임베딩 → Chroma + BM25 색인
 
 [실행]  질문 → 기본 RAG : 검색 → 근거 판단 → 답변
-             → Agent    : 판단(route) → 검색 → 근거 충분? → (부족하면 검색어 바꿔 재검색, 최대 2번)
+             → Agent    : 검색 → 판단(근거 충분? 부적절? 인젝션?) → (부족하면 검색어 바꿔 재검색, 최대 2번)
                           → 답변 → 인용·숫자 검사 → (실패하면 재작성 1번)
 
 [평가]  답변·인용·대응 행동 저장 → 채점 → 실패 원인 분류 → 실험끼리 비교
@@ -214,7 +214,7 @@ pdfplumber 기본 `extract_text()`는 쪽 전체를 위→아래로 읽어서, �
 - 대응 행동 7가지: `answer` · `answer_qualified` · `correct` · `clarify` · `abstain` · `defer_freshness` · `refuse`
 - 질문 속 "이전 지시를 무시하고…" 같은 **끼워 넣은 지시**는 걸러 낸 질문(`clean_query`)으로 검색
 - 근거에 없는 숫자 금지, 투자 권유 금지
-- Agent 끝내는 조건: 재검색 최대 2번, 재작성 최대 1번, AI 호출 최대 8번. 구조도는 [`docs/agent_graph.md`](docs/agent_graph.md)
+- Agent: **검색 먼저 → 검색 결과를 보고 한 번에 판단** (D34, 구현 대기). 끝내는 조건: 재검색 최대 2번, 재작성 최대 1번, AI 호출 최대 7번. 구조도는 [`docs/agent_graph.md`](docs/agent_graph.md)
 
 ---
 
