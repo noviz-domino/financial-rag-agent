@@ -78,6 +78,21 @@ def test_recursive_split_size_overlap_and_positions():
     assert any(parts[i][1] < parts[i - 1][1] + len(parts[i - 1][0]) for i in range(1, len(parts)))   # 겹침 존재
 
 
+def test_recursive_overlap_is_real_even_with_long_lines():
+    """줄 길이(~100자)가 overlap(50)보다 길어도 이웃 조각은 최소 overlap 글자를 공유한다 (예전엔 겹침 0)."""
+    text = "\n".join(f"{j:03d} " + "가나다 라마바 " * 14 for j in range(30))      # 한 줄 약 100자
+    for size, ov in ((300, 100), (500, 50), (200, 50)):
+        parts = recursive_split(text, size, ov)
+        assert len(parts) > 3
+        for piece, start in parts:
+            assert text[start:start + len(piece)] == piece and len(piece) <= size
+        for (p0, s0), (p1, s1) in zip(parts, parts[1:]):
+            shared = s0 + len(p0) - s1
+            assert shared >= ov, (size, ov, shared)
+        assert "".join(p[0][max(0, parts[i - 1][1] + len(parts[i - 1][0]) - p[1]):] if i else p[0]
+                       for i, p in enumerate(parts)) == text           # 내용 손실 없음
+
+
 def test_figure_refs_link_text_to_figure_chunk():
     fig = mk_chunk("f1", "a.pdf", "additional", "[그림] 그림 Ⅲ-9 가계부채\n값", content_type="figure", caption="그림 Ⅲ-9 가계부채")
     txt = mk_chunk("t1", "a.pdf", "additional", "자세한 내용은 그림 Ⅲ-9 참고")

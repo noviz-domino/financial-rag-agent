@@ -67,24 +67,48 @@ def _segments(text, start, end, size, seps):
     return [(k, min(k + size, end)) for k in range(start, end, size)]
 
 
+_SNAP = 16          # 겹침 시작점을 공백·문장부호 쪽으로 당겨 올 수 있는 최대 글자 수
+_SNAP_CHARS = " \n\t.,;:!?)]}。·"
+
+
+def _snap_back(text, pos, lo):
+    """pos 에서 앞(lo 까지)으로 가며 공백·문장부호 바로 뒤를 찾는다. 없으면 pos 그대로."""
+    for k in range(pos, max(lo, pos - _SNAP) - 1, -1):
+        if k > 0 and text[k - 1] in _SNAP_CHARS:
+            return k
+    return pos
+
+
 def recursive_split(text: str, size: int = 500, overlap: int = 50, seps=("\n\n", "\n", " ", "")):
-    """반환: [(조각 글, 시작 위치)]. 조각은 원문의 연속 구간이라 위치로 쪽·근거 ID 를 연결할 수 있다."""
-    segs = [s for s in _segments(text, 0, len(text), size, list(seps)) if s[1] > s[0]]
-    chunks, cur = [], []
-    for s in segs:
-        if cur and s[1] - cur[0][0] > size:
-            chunks.append((cur[0][0], cur[-1][1]))
-            while cur and (cur[-1][1] - cur[0][0] > overlap or s[1] - cur[0][0] > size):
-                cur.pop(0)
-        cur.append(s)
-    if cur:
-        chunks.append((cur[0][0], cur[-1][1]))
-    out, seen = [], set()
-    for a, b in chunks:
-        if (a, b) in seen or not text[a:b].strip():
-            continue
-        seen.add((a, b))
-        out.append((text[a:b], a))
+    """반환: [(조각 글, 시작 위치)]. 조각은 원문의 연속 구간이라 위치로 쪽·근거 ID 를 연결할 수 있다.
+
+    겹침은 글자 단위로 실제 적용한다: 먼저 (size - overlap - 여유) 크기로 겹침 없이 묶고, 다음 조각의 시작을
+    앞 조각 끝에서 overlap 글자 앞으로 당긴다(줄 중간이어도 됨). 시작점은 가까운 공백·문장부호 뒤로 맞춘다.
+    그래서 이웃 조각은 최소 overlap 글자를 공유하고 조각 길이는 size 이하다."""
+    overlap = max(0, min(overlap, size // 2))
+    slack = _SNAP if size - overlap - _SNAP >= size // 3 else 0
+    budget = size - overlap - slack
+    segs = [s for s in _segments(text, 0, len(text), budget, list(seps)) if s[1] > s[0]]
+    spans, cur_a, cur_b = [], None, None
+    for a, b in segs:
+        if cur_a is not None and b - cur_a > budget:
+            spans.append((cur_a, cur_b))
+            cur_a = None
+        if cur_a is None:
+            cur_a = a
+        cur_b = b
+    if cur_a is not None:
+        spans.append((cur_a, cur_b))
+    out, prev_end = [], None
+    for a, b in spans:
+        start = a
+        if prev_end is not None and overlap:
+            start = _snap_back(text, max(0, prev_end - overlap), max(0, prev_end - overlap - slack))
+            start = min(start, a)
+        piece = text[start:b]
+        if piece.strip():
+            out.append((piece, start))
+        prev_end = b
     return out
 
 
