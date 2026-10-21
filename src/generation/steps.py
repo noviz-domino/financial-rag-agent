@@ -33,16 +33,21 @@ def judge_step(client, cfg, question, results, trace=None) -> dict:
                 "missing_info": "", "reason": f"판단 JSON 오류: {e}"}
 
 
-def route_step(client, cfg, question, trace=None) -> dict:
-    """Agent 의 route: 검색 전 유형·안전·인젝션 판단 (judge 와 같은 JSON 형식)."""
-    r = _call(client, cfg, "route", P.route_prompt(question), {"question": question})
+def grade_step(client, cfg, question, results, trace=None) -> dict:
+    """Agent 의 grade: 검색 결과를 보고 한 번에 판단 (judge 형식 + sufficient, link_hint).
+    답변류 행동이 아니면 sufficient 는 항상 False (재검색 또는 정형 응답으로 간다)."""
+    r = _call(client, cfg, "grade", P.grade_prompt(question, results), {"question": question, "results": slim(results)})
     try:
-        return parse_judge(r.data)
+        out = parse_judge(r.data)
     except SchemaError as e:
         if trace is not None:
-            trace.append({"node": "route", "parse_error": str(e)})
-        return {"behavior": "answer", "injection": False, "clean_query": "", "use_chunk_ids": [], "missing_info": "",
-                "reason": f"route JSON 오류: {e}"}
+            trace.append({"node": "grade", "parse_error": str(e)})
+        out = {"behavior": "abstain", "injection": False, "clean_query": "", "use_chunk_ids": [], "missing_info": "",
+               "reason": f"grade JSON 오류: {e}"}
+        return {**out, "sufficient": False, "link_hint": False}
+    d = r.data
+    return {**out, "sufficient": out["behavior"] in ANSWER_LIKE and bool(d.get("sufficient", True)),
+            "link_hint": bool(d.get("link_hint"))}
 
 
 def answer_step(client, cfg, question, behavior, results, extra="", trace=None) -> dict:

@@ -1,18 +1,19 @@
 """LangGraph Agent (기획서 4장). 구조도와 노드·갈래가 1:1 이다.
 
-START → route ─┬ refuse ─────────→ END          (부적절한 요청)
-               ├ clarify ────────→ END          (조건 부족)
-               ├ defer_freshness → END          (최신 정보)
-               └ retrieve → grade ─┬ 충분 ───────────────→ generate
-                     ↑             ├ 링크로 보완(2차) → expand → generate
-                     └─ rewrite ←──┤ 부족 & 재검색 < 2
-                                   └ 부족 & 재검색 = 2 → abstain → END
-               generate → verify ─┬ 통과 → END
-                                  ├ 실패 & 재생성 < 1 → generate
-                                  └ 실패 & 재생성 = 1 → abstain → END
-AI 호출 상한 8 (route 1 + grade 3 + rewrite 2 + generate 2): 넘으면 그 자리에서 abstain.
+START → retrieve → grade ─┬ refuse ─────────→ END          (부적절한 요청)
+           ↑              ├ clarify ────────→ END          (조건 부족)
+           │              ├ defer_freshness → END          (최신 정보)
+           │              ├ 충분 ───────────────→ generate
+           │              ├ 링크로 보완(2차) → expand → generate
+           └── rewrite ←──┤ 부족 & 재검색 < 2   (인젝션이면 지시를 뺀 질문으로)
+                          └ 부족 & 재검색 = 2 → abstain → END
+          generate → verify ─┬ 통과 → END
+                             ├ 실패 & 재생성 < 1 → generate
+                             └ 실패 & 재생성 = 1 → abstain → END
+모든 판단은 검색 결과를 본 뒤 grade 가 한 번에 한다 (D34: 검색 전 route 판단은 과다 거절 0.32 를 만들어 없앴다).
+AI 호출 상한 7 (grade 3 + rewrite 2 + generate 2): 넘으면 그 자리에서 abstain.
 verify 는 규칙만(AI 호출 없음). 검색 도구·AI·프롬프트는 기본 RAG 와 같다.
-refuse/clarify/defer_freshness/abstain 응답은 AI 없이 route·grade 의 이유로 만든 정형 문장이다 (호출 수 상한을 지키기 위해).
+refuse/clarify/defer_freshness/abstain 응답은 AI 없이 grade 의 이유로 만든 정형 문장이다 (호출 수 상한을 지키기 위해).
 """
 from __future__ import annotations
 
@@ -23,18 +24,17 @@ from langgraph.graph import END, START, StateGraph
 from src.agent.verify import verify_answer
 from src.common.llm import current_meter, use_meter
 from src.generation import prompts as P
-from src.generation.steps import ANSWER_LIKE, _call, answer_step, route_step, select_context, slim
-from src.common.schemas import SchemaError
+from src.generation.steps import ANSWER_LIKE, _call, answer_step, grade_step, select_context
 
-NODES = ["route", "retrieve", "grade", "rewrite", "expand", "generate", "verify", "refuse", "clarify",
+NODES = ["retrieve", "grade", "rewrite", "expand", "generate", "verify", "refuse", "clarify",
          "defer_freshness", "abstain"]
+TERMINAL = ("refuse", "clarify", "defer_freshness")   # grade 가 이 행동으로 판단하면 재검색 없이 바로 정형 응답
 
 
 class AgentState(TypedDict, total=False):
     case_id: str
     question: str
     scope: list
-    route: str
     injection: bool
     clean_query: str
     queries: list
@@ -85,14 +85,6 @@ def build_graph(retriever, client, cfg: dict):
         return s.get("trace", []) + [kw]
 
     # ---- 노드
-    def route(s):
-        r = route_step(client, cfg, s["question"], s.get("trace"))
-        tr = log(s, node="route", behavior=r["behavior"], injection=r["injection"], clean_query=r["clean_query"],
-                 reason=r["reason"])
-        queries = [r["clean_query"]] if r["injection"] and r["clean_query"] else s["queries"]   # 지시를 뺀 질문으로 검색
-        return {"route": r["behavior"], "injection": r["injection"], "clean_query": r["clean_query"],
-                "reason": r["reason"], "queries": queries, "trace": tr, **_sync(s)}
-
     def retrieve(s):
         q = s["queries"][-1]
         res = retriever.search(q, k, scope=s["scope"])
@@ -102,13 +94,13 @@ def build_graph(retriever, client, cfg: dict):
     def grade(s):
         if calls() >= max_calls:
             return {"cap_hit": True, "trace": log(s, node="grade", note="AI 호출 상한"), **_sync(s)}
-        q = q_of(s)
-        r = _call(client, cfg, "grade", P.grade_prompt(q, s["retrieved"]), {"question": q, "results": slim(s["retrieved"])})
-        d = r.data if isinstance(r.data, dict) else {}
-        g = {"sufficient": bool(d.get("sufficient")), "link_hint": bool(d.get("link_hint")),
-             "missing_info": str(d.get("missing_info") or ""), "use_chunk_ids": [str(x) for x in d.get("use_chunk_ids") or []],
-             "reason": str(d.get("reason") or "")}
-        return {"grade": g, "missing_info": g["missing_info"], "trace": log(s, node="grade", **g), **_sync(s)}
+        trace = list(s.get("trace", []))
+        g = grade_step(client, cfg, q_of(s), s["retrieved"], trace)
+        # 인젝션은 첫 판단에서 한 번 찾으면 유지 (재검색 뒤의 판단은 이미 지시를 뺀 질문을 보므로 다시 못 찾는다)
+        injection = bool(s.get("injection")) or g["injection"]
+        clean_query = s.get("clean_query") or g["clean_query"]
+        return {"grade": g, "injection": injection, "clean_query": clean_query, "missing_info": g["missing_info"],
+                "reason": g["reason"], "trace": trace + [{"node": "grade", **g}], **_sync(s)}
 
     def rewrite(s):
         if calls() >= max_calls:
@@ -139,7 +131,8 @@ def build_graph(retriever, client, cfg: dict):
         if calls() >= max_calls:
             return {"cap_hit": True, "trace": log(s, node="generate", note="AI 호출 상한"), **_sync(s)}
         q = q_of(s)
-        beh = s["route"] if s["route"] in ANSWER_LIKE else "answer"
+        g_beh = (s.get("grade") or {}).get("behavior")
+        beh = g_beh if g_beh in ANSWER_LIKE else "answer"
         ctx = select_context(s["context"], (s.get("grade") or {}).get("use_chunk_ids", []))
         extra = P.REGEN_EXTRA.format(errors="; ".join(s["verify_errors"])) if s.get("verify_errors") else ""
         a = answer_step(client, cfg, q, beh, ctx, extra, s.get("trace"))
@@ -176,13 +169,12 @@ def build_graph(retriever, client, cfg: dict):
     abstain = _final("abstain", "abstain", abstain_text)
 
     # ---- 분기
-    def after_route(s):
-        return {"refuse": "refuse", "clarify": "clarify", "defer_freshness": "defer_freshness"}.get(s["route"], "retrieve")
-
     def after_grade(s):
         if s.get("cap_hit"):
             return "exhausted_or_cap"
         g = s["grade"]
+        if g["behavior"] in TERMINAL:
+            return g["behavior"]
         if g["sufficient"]:
             return "sufficient"
         if g["link_hint"] and ac.get("expand") and not s.get("expanded"):
@@ -201,16 +193,15 @@ def build_graph(retriever, client, cfg: dict):
         return "regen" if s["regen_count"] < max_regen else "fail"
 
     g = StateGraph(AgentState)
-    for name, fn in (("route", route), ("retrieve", retrieve), ("grade", grade), ("rewrite", rewrite), ("expand", expand),
+    for name, fn in (("retrieve", retrieve), ("grade", grade), ("rewrite", rewrite), ("expand", expand),
                      ("generate", generate), ("verify", verify), ("refuse", refuse), ("clarify", clarify),
                      ("defer_freshness", defer), ("abstain", abstain)):
         g.add_node(name, fn)
-    g.add_edge(START, "route")
-    g.add_conditional_edges("route", after_route, {"refuse": "refuse", "clarify": "clarify",
-                                                   "defer_freshness": "defer_freshness", "retrieve": "retrieve"})
+    g.add_edge(START, "retrieve")
     g.add_edge("retrieve", "grade")
-    g.add_conditional_edges("grade", after_grade, {"sufficient": "generate", "link": "expand", "retry": "rewrite",
-                                                   "exhausted_or_cap": "abstain"})
+    g.add_conditional_edges("grade", after_grade, {"refuse": "refuse", "clarify": "clarify",
+                                                   "defer_freshness": "defer_freshness", "sufficient": "generate",
+                                                   "link": "expand", "retry": "rewrite", "exhausted_or_cap": "abstain"})
     g.add_conditional_edges("rewrite", after_rewrite, {"ok": "retrieve", "cap": "abstain"})
     g.add_edge("expand", "generate")
     g.add_conditional_edges("generate", after_generate, {"ok": "verify", "cap": "abstain"})
@@ -236,4 +227,4 @@ def run_agent(case: dict, retriever, client, cfg: dict) -> dict:
             "injection": out.get("injection", False), "clean_query": out.get("clean_query", ""),
             "retrieved": out.get("retrieved", []), "queries": out.get("queries", []), "trace": out.get("trace", []),
             "usage": usage, "reason": out.get("reason", ""), "state": {k: out.get(k) for k in (
-                "route", "retry_count", "regen_count", "verify_errors", "missing_info", "grade")}}
+                "retry_count", "regen_count", "verify_errors", "missing_info", "grade")}}
