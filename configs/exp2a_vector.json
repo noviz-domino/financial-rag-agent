@@ -1,0 +1,8 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp2a_vector",
+  "description": "실험 2a 검색: 하이브리드 → 뜻 검색(벡터)만",
+  "retrieval": {
+    "mode": "vector"
+  }
+}

@@ -6,7 +6,8 @@
 
 ## 현재 상태
 - 원본 데이터와 과제 안내, [구현 결정 체크리스트](docs/구현_결정_체크리스트.md)가 들어 있어요.
-- 구현 방법은 아래 **진행 방식**대로 정하고, 하나의 코드로 만들어 갈 예정이에요.
+- [기획서](docs/기획서.md)의 8장 1~6단계(데이터 형식·준비 파이프라인·검색·기본 RAG+평가 루프·실험 설정·Agent)가 구현돼 있어요. 실행 방법은 아래 **실행 방법**에 있어요.
+- 골든셋 작성(7단계)과 실제 Gemini 실행·실험 결과는 아직이에요.
 
 ## 진행 방식: 각자 계획 → AI 조율 → 회의 결정 → 구현
 ```
@@ -67,13 +68,73 @@ financial-rag-agent 저장소 docs/plans/ 의 세 팀원 계획을 단계별(0~1
   docs/plans/조율_결과.md 에 써줘
 ```
 
+## 실행 방법
+구현은 [docs/기획서.md](docs/기획서.md)를 그대로 따라요. 모든 명령은 **Git Bash**에서 저장소 루트에서 실행해요.
+
+### 0. 준비
+```bash
+python -m venv .venv
+source .venv/Scripts/activate            # macOS/Linux 는 source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env                     # .env 에 GEMINI_API_KEY 를 넣어요 (API 키 없이도 아래 "키 없이" 명령은 돌아가요)
+pytest                                   # 단위·엔드투엔드 테스트 (네트워크·API 를 쓰지 않아요)
+```
+
+### 1. 준비 파이프라인 (PDF → 쪽 레코드 → 표·그림 → 청크 → 색인)
+```bash
+python -m src.pipeline.build --config configs/baseline.json                 # 전체 (Gemini 그림·표 설명 + 임베딩, 키 필요)
+python -m src.pipeline.build --config configs/baseline.json --no-vlm        # 그림·표 Gemini 생략 (임베딩은 키 필요)
+python -m src.pipeline.build --config configs/baseline.json --no-vlm --no-index   # 키 없이 청크까지
+python -m src.pipeline.build --config configs/baseline.json --offline       # 가짜 AI·가짜 임베딩으로 끝까지 (키 불필요)
+python -m src.pipeline.build --config configs/baseline.json --no-vlm --no-index --variants all   # 청킹 실험용 3종 모두
+python -m src.sources.check                                                 # 정답 근거 ID 누락 확인 (0 이어야 해요)
+```
+산출물은 `data/`(git 제외): `pages.jsonl`, `sources.jsonl`, `figures.jsonl`, `figure_review.jsonl`(사람이 볼 그림), `chunks/*.jsonl`, `index/`(Chroma), `cache/`(Gemini·임베딩·형태소 캐시).
+캐시를 지우지 않으면 다시 돌려도 Gemini 비용이 들지 않아요.
+
+### 2. 평가 루프
+```bash
+# 키 없이: 가짜 AI 로 형식 확인 (결과는 runs/dry_{실험ID}/)
+python -m src.evaluation.run --config configs/baseline.json --sets positive,negative --dry-run --limit 5
+python -m src.evaluation.run --config configs/exp3_agent.json --sets positive,negative --dry-run --limit 5
+# 키 없이: 검색 지표만 (BM25 면 API 불필요)
+python -m src.evaluation.run --config configs/exp2b_bm25.json --sets positive,negative,life_guide,additional --retrieval-only
+# 키가 있을 때: 180문항 실제 실행 (질문마다 AI 약 2회 + 채점 1회)
+python -m src.evaluation.run --config configs/baseline.json --sets positive,negative,life_guide,additional
+```
+`runs/{실험ID}/`에 `config.json`(설정+기준 대비 diff+모델·프롬프트), `results.jsonl`, `scores.jsonl`, `summary.json`이 저장되고 `runs/experiments.jsonl`에 한 줄이 추가돼요. 같은 실험ID 폴더가 있으면 `--force` 없이는 멈춰요.
+
+### 3. 실험 (기준 대비 한 가지씩 바꾼 설정)
+| 실험 | 설정 파일 | 바꾸는 것 |
+|---|---|---|
+| 기준 | `configs/baseline.json` | 구조형 청킹 · 하이브리드 k=5 · 기본 RAG |
+| 0 흔들림 | `configs/exp0_repeat.json` | 기준을 한 번 더 |
+| 1 청킹 | `exp1a_recursive_500_50.json` / `exp1b_parentchild.json` | 글자 수 자르기 / parent 펼치기 |
+| 2 검색 | `exp2a_vector.json` / `exp2b_bm25.json` | 뜻 검색만 / 단어 검색만 |
+| 3 RAG vs Agent | `exp3_agent.json` | 흐름만 Agent 그래프로 |
+| 4 제목 붙이기 | `exp4_embed_prefix.json` | 임베딩 대상 `text` → `embed_text` |
+실험 설정 파일에는 바꾸는 항목만 적어요(나머지는 baseline). 청킹이 다른 실험은 먼저 `--variants all` 로 청크를 만들어 두세요 (없으면 평가 때 자동으로 만들어요).
+골든셋은 `05_golden/golden_set.jsonl`에 사람이 쓰고(형식: `05_golden/golden_schema.json`), 설정을 확정한 뒤 `--sets golden` 으로 한 번만 평가해요.
+
+### 4. Agent 구조도
+```bash
+python -m src.agent.export               # LangGraph → Mermaid, docs/agent_graph.md 갱신
+```
+
 ## 폴더 구조
 ```
 financial-rag-agent/
 ├─ 01_data/        원본 PDF 23개            (수정 금지)
 ├─ 02_questions/   질문 JSON 180문항        (수정 금지)
 ├─ 03_answers/     기준 답안 MD·JSONL       (수정 금지)
+├─ src/            loading · tables · figures · sources · chunking · index · retrieval · generation · agent · evaluation · common · pipeline
+├─ configs/        baseline.json, behavior_map.json, 실험 설정 (exp*.json)
+├─ tests/          pytest (API 를 쓰지 않음)
+├─ 05_golden/      골든셋 형식 (내용은 사람이 작성)
+├─ data/ runs/     생성 결과 (git 제외)
 └─ docs/
+   ├─ 기획서.md                 구현 기준 문서
+   ├─ agent_graph.md            Agent 구조도 (자동 생성)
    ├─ 과제_안내.md              과제 설명 원문
    ├─ 구현_결정_체크리스트.md    단계별(0~12) 정할 것·보기·예시
    └─ plans/                    팀원별 계획 문서와 조율 결과 (진행 방식 참고)

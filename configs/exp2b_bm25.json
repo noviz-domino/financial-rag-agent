@@ -1,0 +1,8 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp2b_bm25",
+  "description": "실험 2b 검색: 하이브리드 → 단어 검색(Kiwi BM25)만",
+  "retrieval": {
+    "mode": "bm25"
+  }
+}

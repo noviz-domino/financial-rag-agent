@@ -1,0 +1,8 @@
+{
+  "_note": "baseline.json 위에 덮어쓰는 값만 적는다 (한 번에 한 가지만 변경)",
+  "exp_id": "exp4_embed_prefix",
+  "description": "실험 4 제목 붙이기: 임베딩 대상 text → embed_text([문서 > 장 > 절] 접두어)",
+  "retrieval": {
+    "embed_field": "embed_text"
+  }
+}

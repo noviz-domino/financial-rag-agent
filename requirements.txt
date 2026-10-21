@@ -1,0 +1,16 @@
+# 버전 고정 (Python 3.11+, 개발은 3.12.10 / Windows 11 에서 확인)
+pdfplumber==0.11.10
+pypdfium2==5.14.0
+pillow==13.0.0
+numpy==2.5.4
+chromadb==1.5.9
+kiwipiepy==0.24.0
+rank-bm25==0.2.2
+google-genai==2.31.0
+langgraph==1.2.16
+# ormsgpack 1.13.0 은 이 PC 의 앱 제어 정책에 DLL 이 차단돼 langgraph 가 import 되지 않음 → 1.12.2 로 고정
+ormsgpack==1.12.2
+python-dotenv==1.2.4
+# Windows 내장 OCR (그림 속 글자 확인). 다른 OS 에서는 설치되지 않고 no-op OCR 로 내려감
+winocr==0.0.15; sys_platform == "win32"
+pytest==9.1.1
