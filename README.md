@@ -300,6 +300,7 @@ git switch -c {내 GitHub 아이디}             # 2. 처음 한 번: 내 브랜
 git merge main                              # 3. 작업 시작 전 main 최신 내용 가져오기
 #  ... src/ · configs/ 수정 ...
 pytest                                      # 4. 깨진 게 없는지 확인 (API 안 씀, 몇 초)
+bash scripts/check_notebook.sh             #    src/ 를 바꿨으면 노트북도 끝까지 도는지 확인 (가짜 AI, 키·비용 없음)
 git add {고친 파일} && git commit -m "무엇을 했는지"
 git push -u origin {내 GitHub 아이디}        # 5. 푸시 → main 으로 PR (gh pr create --base main)
 ```
@@ -333,7 +334,7 @@ git push -u origin {내 GitHub 아이디}        # 5. 푸시 → main 으로 PR 
 | 대응 행동 매핑 | `configs/behavior_map.json` |
 | 노트북 설명 글 | `notebooks/금융_RAG_Agent_전체실행.ipynb` |
 
-로직을 바꾸면 **테스트도 같이** 추가하거나 고쳐요 (`tests/`). 결정한 내용과 이유는 [`docs/개발기록/02_결정_기록.md`](docs/개발기록/02_결정_기록.md)에, 실험 결과는 `04_실험_결과.md`에 한 줄씩 남겨요. 제출 문서를 쓸 때 이 기록을 그대로 써요.
+로직을 바꾸면 **테스트도 같이** 추가하거나 고쳐요 (`tests/`). **노트북도 같이 맞춰요**: 노트북은 `src/`를 불러 쓰므로 로직은 자동 반영되지만, 함수 이름·인자·설정 이름이 바뀌면 노트북이 깨져요. `bash scripts/check_notebook.sh`로 확인하고, 새 실험은 10장에, 바뀐 기준값은 설명 글에 반영해요. 결정한 내용과 이유는 [`docs/개발기록/02_결정_기록.md`](docs/개발기록/02_결정_기록.md)에, 실험 결과는 `04_실험_결과.md`에 한 줄씩 남겨요. 제출 문서를 쓸 때 이 기록을 그대로 써요.
 
 ### 처음 한 번 해 둘 설정
 - **알림 줄이기**: 저장소 오른쪽 위 **Watch ▾ → Participating and @mentions** (PR마다 메일이 오는 걸 줄여요. 각자 설정)
