@@ -1,0 +1,36 @@
+# PR이 열리면 GitHub가 자동으로 승인하고 main에 머지해요. (GitHub 서버에서 실행)
+# Draft PR은 건너뛰어요. 이미 열린 PR은 Actions → auto-merge → Run workflow 로 한 번에 머지해요.
+name: auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 새 PR 승인·머지
+        if: github.event_name == 'pull_request_target' && github.event.pull_request.draft == false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --approve || true
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge
+
+      - name: 열려 있는 PR 전부 머지 (수동 실행)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for n in $(gh pr list --repo "$GITHUB_REPOSITORY" --base main --state open --json number,isDraft --jq 'sort_by(.number) | .[] | select(.isDraft | not) | .number'); do
+            gh pr review "$n" --repo "$GITHUB_REPOSITORY" --approve || true
+            gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --merge || echo "PR #$n 머지 실패 (충돌 확인 필요)"
+          done
