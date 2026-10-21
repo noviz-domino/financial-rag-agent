@@ -9,6 +9,9 @@
 - [기획서](docs/기획서.md)의 8장 1~6단계(데이터 형식·준비 파이프라인·검색·기본 RAG+평가 루프·실험 설정·Agent)가 구현돼 있어요. 실행 방법은 아래 **실행 방법**에 있어요.
 - 골든셋 작성(7단계)과 실제 Gemini 실행·실험 결과는 아직이에요.
 
+## 학습용 노트북
+`notebooks/금융_RAG_Agent_전체실행.ipynb` 한 파일에 준비 → 실행 → 평가 → 분석 전 과정이 들어 있어요(키·비용 없이 오프라인 실행, 결과 저장됨). 열기: `pip install -r requirements.txt -r requirements-dev.txt` 후 `jupyter lab notebooks/` (Git Bash).
+
 ## 진행 방식: 각자 계획 → AI 조율 → 회의 결정 → 구현
 ```
 ① 각자 작성   : 체크리스트 양식대로 자기 구현·계획을 docs/plans/{GitHub아이디}.md 에 작성
