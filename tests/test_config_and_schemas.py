@@ -51,9 +51,42 @@ def test_config_diff_only_changed_items():
 
 
 def test_each_experiment_changes_one_element():
-    for f, n_keys in (("exp0_repeat", 0), ("exp1a_recursive_500_50", 1), ("exp2a_vector", 1), ("exp2b_bm25", 1),
-                      ("exp3_agent", 1), ("exp4_embed_prefix", 1), ("exp1b_parentchild", 2)):
+    for f, n_keys in (("exp0_repeat", 0), ("exp2a_vector", 1), ("exp2b_bm25", 1), ("exp3_agent", 1),
+                      ("exp4_embed_prefix", 1), ("exp5_k3", 1), ("exp5_k4", 1), ("exp6_embed2", 1),
+                      ("exp1s_structural_800", 1), ("exp1s_structural_1600", 1),
+                      ("exp1a_recursive_300_100", 3), ("exp1a_recursive_500_100", 2), ("exp1a_recursive_800_100", 3),
+                      ("exp1b_parentchild_300", 3), ("exp1b_parentchild_400", 2), ("exp1b_parentchild_600", 3)):
         assert len(diff_config(load_config(ROOT / f"configs/{f}.json"))) == n_keys, f
+
+
+def test_chunk_variant_names_do_not_collide():
+    from src.common.config import chunk_variant_name
+    names = {}
+    for f in sorted((ROOT / "configs").glob("exp*.json")) + [ROOT / "configs/baseline.json"]:
+        cfg = load_config(f)
+        names.setdefault(chunk_variant_name(cfg), set()).add(json.dumps(cfg["chunking"], sort_keys=True))
+    assert all(len(v) == 1 for v in names.values()), names      # 같은 이름 = 같은 청킹 설정 (파일을 덮어쓰지 않음)
+    assert {"structural", "structural_800", "structural_1600", "recursive_300_100", "recursive_500_100",
+            "recursive_800_100", "parentchild_300", "parentchild_400", "parentchild_600"} <= set(names)
+
+
+def test_embedding2_uses_instruction_not_task_type():
+    from src.common.llm import embed_instruction, embed_uses_instruction
+    assert not embed_uses_instruction("gemini-embedding-001") and embed_uses_instruction("gemini-embedding-2")
+    assert embed_instruction("gemini-embedding-001", "RETRIEVAL_QUERY", "질문") == "질문"
+    assert embed_instruction("gemini-embedding-2", "RETRIEVAL_QUERY", "질문") == "task: search result | query: 질문"
+    assert embed_instruction("gemini-embedding-2", "RETRIEVAL_DOCUMENT", "본문") == "title: none | text: 본문"
+
+
+def test_embedding_cache_is_separated_by_model(tmp_path):
+    c = _client(tmp_path)
+    _, n1 = c.embed(["가나다"], "gemini-embedding-001", 32)
+    _, n2 = c.embed(["가나다"], "gemini-embedding-2", 32)
+    _, n3 = c.embed(["가나다"], "gemini-embedding-2", 32)
+    assert (n1, n2, n3) == (1, 1, 0)
+    v1, _ = c.embed(["가나다"], "gemini-embedding-001", 32, "RETRIEVAL_QUERY")
+    v2, _ = c.embed(["가나다"], "gemini-embedding-2", 32, "RETRIEVAL_QUERY")
+    assert not (v1 == v2).all()                              # 2 는 지시문이 붙어 다른 벡터
 
 
 def test_schema_validation():

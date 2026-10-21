@@ -98,6 +98,20 @@ def parse_json_text(text: str):
         raise
 
 
+def embed_uses_instruction(model: str) -> bool:
+    """gemini-embedding-2 계열은 task_type 대신 본문 앞 지시문을 쓴다 (001 은 task_type)."""
+    return "embedding-2" in model
+
+
+def embed_instruction(model: str, task_type: str, text: str) -> str:
+    """모델별 임베딩 입력. 001 은 그대로(task_type 으로 전달), 2 는 검색 질의/문서 지시문을 앞에 붙인다."""
+    if not embed_uses_instruction(model):
+        return text
+    if task_type == "RETRIEVAL_QUERY":
+        return f"task: search result | query: {text}"
+    return f"title: none | text: {text}"
+
+
 # ------------------------------------------------------------------ 백엔드
 class GeminiBackend:
     name = "gemini"
@@ -128,10 +142,12 @@ class GeminiBackend:
     def embed(self, model, texts, dim, task_type):
         from google.genai import types
         out = []
+        uses_instruction = embed_uses_instruction(model)
         for i in range(0, len(texts), 100):
-            r = self._client.models.embed_content(
-                model=model, contents=texts[i:i + 100],
-                config=types.EmbedContentConfig(task_type=task_type, output_dimensionality=dim))
+            part = [embed_instruction(model, task_type, t) for t in texts[i:i + 100]]
+            # gemini-embedding-2 는 task_type 을 무시한다(실측: 있어도 없어도 벡터 동일) → 본문 앞 지시문으로 대신한다.
+            cfg = types.EmbedContentConfig(output_dimensionality=dim) if uses_instruction else                 types.EmbedContentConfig(task_type=task_type, output_dimensionality=dim)
+            r = self._client.models.embed_content(model=model, contents=part, config=cfg)
             out += [e.values for e in r.embeddings]
         return out
 
@@ -157,7 +173,7 @@ class FakeBackend:
         return text, max(1, len(prompt) // 3), max(1, len(text) // 3), 0.0
 
     def embed(self, model, texts, dim, task_type):
-        return [fake_embedding(t, dim) for t in texts]
+        return [fake_embedding(embed_instruction(model, task_type, t), dim) for t in texts]
 
 
 def fake_embedding(text: str, dim: int = 64) -> list[float]:
