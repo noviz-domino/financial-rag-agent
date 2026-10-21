@@ -30,16 +30,34 @@ def setup(max_colwidth: int = 90, max_rows: int = 30):
     return ROOT
 
 
-def ensure_data():
-    """data/ (쪽 레코드·청크·색인) 가 없으면 키 없이 만든다 (--no-vlm --offline: 그림 설명은 생략, 임베딩은 가짜).
-    git 에는 data/ 가 없어서, 저장소를 막 받은 사람은 처음 한 번만 이 단계가 돌아요 (몇 분)."""
+def check_mode(use_api: bool, run_full_eval: bool = False):
+    """지금 모드를 크게 보여 준다. 진짜 모드인데 .env 에 키가 없으면 여기서 멈춘다 (키 값은 출력하지 않음)."""
+    import os
+    if use_api:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(ROOT / ".env")
+        except ImportError:
+            pass
+        if not os.environ.get("GEMINI_API_KEY"):
+            raise RuntimeError("USE_API=True 인데 GEMINI_API_KEY 가 없어요. .env 에 키를 넣거나 USE_API=False 로 바꾸세요.")
+        print("🟢 진짜 Gemini 모드 (비용 발생) | 전체 평가:", "실행" if run_full_eval else "건너뜀")
+    else:
+        print("⚪ 가짜 AI 모드 (키·비용 없음) — 점수는 흐름 확인용이라 의미 없어요")
+
+
+def ensure_data(use_api: bool = False):
+    """data/ (쪽 레코드·청크·색인) 가 없으면 만든다. git 에는 data/ 가 없어서, 저장소를 막 받은 사람은 처음 한 번만 돌아요.
+    use_api=False: 키 없이 (--no-vlm --offline: 그림 설명 생략, 임베딩 가짜, 몇 분)
+    use_api=True : 진짜 Gemini 로 그림 설명·임베딩까지 (비용 발생, 수십 분)"""
     need = [DATA / "pages.jsonl", DATA / "sources.jsonl", DATA / "figures.jsonl", DATA / "chunks" / "structural.jsonl"]
     if all(p.exists() for p in need):
         print("data/ 가 이미 있어요 (그대로 사용)")
         return
-    print("data/ 가 없어 키 없이 만들어요 (몇 분 걸려요) ...")
-    subprocess.run([sys.executable, "-m", "src.pipeline.build", "--config", "configs/baseline.json",
-                    "--no-vlm", "--offline"], cwd=ROOT, check=True)
+    extra = [] if use_api else ["--no-vlm", "--offline"]
+    print("data/ 가 없어", "진짜 Gemini 로" if use_api else "키 없이", "만들어요 ...")
+    subprocess.run([sys.executable, "-m", "src.pipeline.build", "--config", "configs/baseline.json", *extra],
+                   cwd=ROOT, check=True)
 
 
 def show_source(*objs, max_lines: int | None = None):
