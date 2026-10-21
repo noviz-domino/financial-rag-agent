@@ -1,5 +1,17 @@
 # financial-rag-agent
 
+> [!IMPORTANT]
+> **팀원 필독 — `main`에는 직접 푸시할 수 없어요.** (보호 규칙으로 막혀 있어요)
+> 반드시 **내 브랜치에서 작업 → 푸시 → `main`으로 PR**을 올려요. PR은 자동으로 승인·머지돼요.
+> ```bash
+> git switch main && git pull                  # 최신 main 받기
+> git switch -c {내 GitHub 아이디}              # 처음 한 번만 (다음부터는 git switch {내 아이디})
+> git merge main                               # 작업 시작 전, main 최신 내용 가져오기
+> git add . && git commit -m "무엇을 했는지"
+> git push -u origin {내 GitHub 아이디}         # → GitHub에서 main 으로 PR 생성 (gh pr create --base main)
+> ```
+> 브랜치는 **사람당 하나**를 계속 써요. 아직 합치면 안 되는 작업은 PR을 **Draft**로 올려요. 자세한 건 [8. 협업 방식](#8-협업-방식).
+
 금융 PDF 23개(용어집·표준약관·금융생활 가이드북·정책 자료)를 검색해 **근거(파일명·쪽)와 함께 답하는 RAG Agent**와, 그 성능을 숫자로 재는 **평가 루프**예요.
 
 - 답할 수 없는 질문은 지어내지 않고 **되묻기·자료 없음·거절·전제 바로잡기** 중 알맞은 대응을 골라요.
@@ -258,7 +270,7 @@ git merge main                              # 3. 작업 시작 전 main 최신 �
 git push -u origin {내 GitHub 아이디}        # 4. 작업 후 푸시 → main 으로 PR
 ```
 - **브랜치는 사람당 하나**예요. 작업마다 새로 만들지 않고, main에 합친 뒤에도 같은 브랜치에서 이어서 해요.
-- main으로 PR을 올리면 **자동으로 승인·머지**돼요 ([`.github/workflows/auto-merge.yml`](.github/workflows/auto-merge.yml)). 아직 합치면 안 되는 PR은 **Draft**로 올려요.
+- **main 직접 푸시는 보호 규칙으로 막혀 있어요.** main으로 PR을 올리면 **자동으로 승인·머지**돼요 ([`.github/workflows/auto-merge.yml`](.github/workflows/auto-merge.yml)). 아직 합치면 안 되는 PR은 **Draft**로 올려요.
 - 통합 전 개인 작업은 `backup/noviz-domino` 등 `backup/` 브랜치에 보관해요.
 
 ### 팀 규칙
