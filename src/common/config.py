@@ -64,8 +64,8 @@ def chunk_variant_name(cfg: dict) -> str:
     """청킹 설정 -> 파일 이름. 청킹을 바꾼 실험은 다른 청크 파일·인덱스를 쓴다."""
     c = cfg["chunking"]
     s = c["strategy"]
-    if s == "structural":
-        return "structural"
+    if s == "structural":                       # 기준(1200자)은 옛 이름 그대로, 다르면 크기를 이름에 붙인다
+        return "structural" if c.get("max_chars", 1200) == 1200 else f"structural_{c['max_chars']}"
     if s == "recursive":
         return f"recursive_{c['size']}_{c['overlap']}"
     if s == "parentchild":
