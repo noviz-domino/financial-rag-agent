@@ -69,7 +69,7 @@ git switch main && git pull                          # 최신 main 받기
 python -m venv .venv && source .venv/Scripts/activate
 pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env                                 # .env 를 열어 GEMINI_API_KEY 입력
-pytest                                               # API 를 쓰지 않는 테스트 (78개)
+pytest                                               # API 를 쓰지 않는 테스트 (93개)
 ```
 
 ### 노트북으로 보기 (추천)
@@ -266,7 +266,7 @@ runs/experiments.jsonl        실험 목록
 
 ## 6. 현재 상태와 알려진 한계
 
-**됨**: 전체 코드, 테스트 78개 통과, 정답 근거 누락 0, BM25 검색 Hit@5 0.851 (키 없이 측정)
+**됨**: 전체 코드, 테스트 93개 통과, 정답 근거 누락 0, BM25 검색 Hit@5 0.851 (키 없이 측정)
 **진행 중**: 실제 Gemini로 빌드·시험 평가 · **할 일**: 실험 0~4 전체 실행, 골든셋 18문항 작성·검수
 
 **알려진 한계** (고칠 예정)
@@ -274,6 +274,7 @@ runs/experiments.jsonl        실험 목록
 - 글자 수 자르기의 겹침 50자가 PDF 한 줄(약 100자)보다 짧아 실제로는 겹치지 않아요. 실험 1a 해석 때 주의
 - 그림 숫자 검사는 OCR이 같이 틀린 값을 잡지 못해요 → 의심 그림은 사람 확인
 - 대응 행동 매핑 중 애매한 3건(NEG009·034·037)은 팀 확인 필요
+- Agent의 답변 검사(verify)가 질문 숫자로 **계산한 값**(예: 월 50만원 × 12 = 600만원)도 "근거에 없는 숫자"로 막아 답변을 포기해요 (F16, 처리 방식 결정 필요)
 
 ---
 

@@ -5,6 +5,7 @@ dict(JSONL) 로 저장하고, 여기서는 필드 이름과 검증 함수를 한
 """
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -70,6 +71,18 @@ def parse_judge(d: dict) -> dict:
             "missing_info": str(d.get("missing_info") or ""), "reason": str(d.get("reason") or "")}
 
 
+def _page(v) -> int:
+    """인용 쪽 번호. AI 가 '8,9'·'8-9'·'p.8'·[8, 9] 처럼 주면 첫 쪽을 쓴다 (F15). 숫자가 없으면 형식 오류."""
+    if isinstance(v, list) and v:
+        v = v[0]
+    if isinstance(v, int) and not isinstance(v, bool):
+        return v
+    m = re.search(r"\d+", str(v))
+    if not m:
+        raise SchemaError(f"citation page 값 이상: {v!r}")
+    return int(m.group())
+
+
 def parse_answer(d: dict) -> dict:
     """② 답변 JSON: {answer, behavior, citations:[{file,page,chunk_id}], reason}"""
     if not isinstance(d, dict):
@@ -81,7 +94,7 @@ def parse_answer(d: dict) -> dict:
     for c in d.get("citations") or []:
         if not isinstance(c, dict) or "file" not in c or "page" not in c:
             raise SchemaError(f"citation 형식 이상: {c!r}")
-        cites.append({"file": str(c["file"]), "page": int(c["page"]), "chunk_id": c.get("chunk_id")})
+        cites.append({"file": str(c["file"]), "page": _page(c["page"]), "chunk_id": c.get("chunk_id")})
     return {"answer": str(d.get("answer") or ""), "behavior": beh, "citations": cites,
             "reason": str(d.get("reason") or "")}
 
