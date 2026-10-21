@@ -1,0 +1,8 @@
+# 노트북(notebooks/) 실행·변환용. 운영 코드에는 필요 없어요: pip install -r requirements.txt -r requirements-dev.txt
+pandas==3.0.6
+jupyterlab==4.6.4
+notebook==7.6.3
+ipykernel==7.4.0
+nbconvert==7.17.2
+nbformat==5.11.1
+nbclient==0.11.0
