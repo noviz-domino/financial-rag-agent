@@ -1,185 +1,278 @@
 # financial-rag-agent
 
-금융 문서(약관·용어집·금융생활 가이드북·정책 자료) PDF를 검색해 **근거와 함께 답하는 RAG Agent**를 만들고, 직접 만든 평가 지표와 평가 루프로 개선하는 팀 프로젝트예요.
+금융 PDF 23개(용어집·표준약관·금융생활 가이드북·정책 자료)를 검색해 **근거(파일명·쪽)와 함께 답하는 RAG Agent**와, 그 성능을 숫자로 재는 **평가 루프**예요.
 
-과제 원문은 [docs/과제_안내.md](docs/과제_안내.md)에 그대로 있어요.
+- 답할 수 없는 질문은 지어내지 않고 **되묻기·자료 없음·거절·전제 바로잡기** 중 알맞은 대응을 골라요.
+- 같은 질문 180개로 **실행 → 채점 → 실패 원인 분석 → 설정 수정 → 재실행**을 반복해요.
+- 청킹·검색 방식·기본 RAG와 Agent를 **한 번에 한 가지씩 바꿔** 비교해요.
 
-## 현재 상태
-- 원본 데이터와 과제 안내, [구현 결정 체크리스트](docs/구현_결정_체크리스트.md)가 들어 있어요.
-- [기획서](docs/기획서.md)의 8장 1~6단계(데이터 형식·준비 파이프라인·검색·기본 RAG+평가 루프·실험 설정·Agent)가 구현돼 있어요. 실행 방법은 아래 **실행 방법**에 있어요.
-- 골든셋 작성(7단계)과 실제 Gemini 실행·실험 결과는 아직이에요.
+> **개발 배경**: 세 명이 각자 구현·실험한 결과를 원본 PDF와 나란히 대조해, 기능마다 더 나은 쪽의 아이디어와 장점만 골라 하나로 합쳤어요. 결정 근거는 [조율 결과](docs/plans/조율_결과.md)에 있어요.
 
-## 학습용 노트북
-`notebooks/금융_RAG_Agent_전체실행.ipynb` 한 파일에 준비 → 실행 → 평가 → 분석 전 과정이 들어 있어요(키·비용 없이 오프라인 실행, 결과 저장됨). 열기: `pip install -r requirements.txt -r requirements-dev.txt` 후 `jupyter lab notebooks/` (Git Bash).
+---
 
-## 진행 방식: 각자 계획 → AI 조율 → 회의 결정 → 구현
+## 목차
+1. [빠른 시작](#1-빠른-시작)
+2. [전체 흐름](#2-전체-흐름)
+3. [단계별 처리 기준](#3-단계별-처리-기준) ← **팀원이 꼭 알아야 할 바뀐 기준**
+4. [평가](#4-평가)
+5. [실험](#5-실험)
+6. [현재 상태와 알려진 한계](#6-현재-상태와-알려진-한계)
+7. [폴더 구조](#7-폴더-구조)
+8. [협업 방식](#8-협업-방식)
+9. [문서](#9-문서)
+
+---
+
+## 1. 빠른 시작
+
+모든 명령은 **Git Bash**, 저장소 맨 위 폴더에서 실행해요.
+
+```bash
+git switch main && git pull                          # 최신 main 받기
+python -m venv .venv && source .venv/Scripts/activate
+pip install -r requirements.txt -r requirements-dev.txt
+cp .env.example .env                                 # .env 를 열어 GEMINI_API_KEY 입력
+pytest                                               # API 를 쓰지 않는 테스트 (78개)
 ```
-① 각자 작성   : 체크리스트 양식대로 자기 구현·계획을 docs/plans/{GitHub아이디}.md 에 작성
-② PR로 올림   : 브랜치 plan/{GitHub아이디} → PR (파일이 서로 달라 충돌 없음)
-③ AI 조율     : 세 문서 + 결과 파일을 별도의 Claude(Opus 5.5, 노력 수준 높게)에게 전달
-                → 단계별 비교표, 공통점, 쟁점, 쟁점 해결용 실험 제안, 합의안 초안
-④ 30분 회의   : 쟁점만 사람이 결정 → 아래 "결정 사항" 표에 기록
-⑤ 구현        : 결정대로 공용 구조에서 담당을 나눠 구현 (할 일별 브랜치 → PR)
-```
 
-### 작성 규칙 (① 단계)
-| 규칙 | 이유 |
+### 노트북으로 보기 (추천)
+[`notebooks/금융_RAG_Agent_전체실행.ipynb`](notebooks/금융_RAG_Agent_전체실행.ipynb) 한 파일을 위에서 아래로 실행하면 PDF 읽기부터 평가·결과 분석까지 전 과정을 단계별 설명과 함께 볼 수 있어요.
+
+| 맨 위 설정 | 동작 |
 |---|---|
-| **실제로 만든 것·시험한 것** 기준으로 쓰고, 안 해 본 건 **"미검증"** 표시 | AI에게 "채워 줘"만 하면 세 문서가 비슷한 기본 추천으로 채워져서 비교 의미가 없어요 |
-| 항목마다 **근거 종류**를 적기: `측정` / `시험해 봄` / `문서·의견` | 조율할 때 측정 수치와 의견이 같은 무게로 섞이지 않게 |
-| 수치는 **같은 질문 세트·같은 채점 방법**으로 잰 것만 | 기준이 다르면 "0.8 vs 0.7"이 무의미해요 |
-| 코드·결과 파일 **위치(경로나 링크)** 를 같이 적기 | 조율하는 쪽이 글만 보고 판단하지 않게 |
+| `USE_API = True` (기본) | 진짜 Gemini 사용 (**비용 발생**) |
+| `USE_API = False` | 가짜 AI로 **코드가 끝까지 도는지만** 확인 (키·비용 없음, 점수 의미 없음) |
+| `RUN_FULL_EVAL = True` | 180문항 전체 평가까지 (기본 꺼짐) |
 
-### 계획 문서 올리는 방법 (Claude Code 사용)
-1. 이 저장소를 내 컴퓨터에 받아 두고, 그 폴더에서 Claude Code 를 열어요.
-2. 아래 **요청문 ①**의 `{내 GitHub 아이디}`, `{Reviewer 아이디}`, 코드 위치를 바꿔서 보내요.
-   → Claude Code 가 문서 작성 → 브랜치 `plan/{아이디}` 생성 → 커밋 → 푸시 → PR 생성까지 해요.
-3. **Reviewer 는 돌아가며 지정**해요: noviz-domino → jjh7757 → yellowgreenbean → noviz-domino
-4. 리뷰어는 PR 의 **Files changed** 에서 내용을 보고 **Approve** → **Merge** 해요.
-   (리뷰도 Claude Code 에게 "PR #번호 내용 요약하고 빠진 항목 알려줘"라고 맡길 수 있어요)
-5. 세 문서가 모두 main 에 합쳐지면 **요청문 ②**로 조율을 시작해요.
-
-### 문서 형식 (docs/plans/{GitHub아이디}.md)
-체크리스트의 단계 번호(0~12)를 그대로 쓰고, 단계마다 아래 표를 채워요.
-
-| 항목 | 내 선택 | 근거 종류 | 수치·결과 | 장점 | 걱정되는 점 | 다른 안도 괜찮은가 |
-|---|---|---|---|---|---|---|
-| 1-1 라이브러리 | 예) pdfplumber | 측정 | 예) BM25 Hit@5 0.85 (가이드북+추가 80문항) | | | 예) pymupdf4llm 도 가능 |
-
-### 요청문 ① 각자 Claude에게 (작성용)
-```
-financial-rag-agent 저장소의 docs/구현_결정_체크리스트.md 단계(0~12) 순서대로
-내 구현·계획을 docs/plans/{내 GitHub 아이디}.md 에 정리해줘. 모든 답변은 한국어로.
-- 내가 실제로 만든 코드·실험 결과를 기준으로 채우고, 안 해 본 건 "미검증"으로 표시해
-- 항목마다 근거 종류(측정 / 시험해 봄 / 문서·의견)를 적어
-- 수치는 어떤 질문 세트·어떤 채점 방법으로 잰 것인지 같이 적어
-- 코드·결과 파일 위치를 적어
-- README 의 "문서 형식" 표 양식을 따라줘
-- 다 쓰면: main 을 최신으로 받고 → 브랜치 plan/{내 GitHub 아이디} 를 만들어서 커밋 → 푸시
-  → PR 을 만들고 Reviewer 로 팀원 한 명({Reviewer 아이디})을 지정해줘
-내 코드 위치: (여기에 경로)
-```
-
-### 요청문 ② 조율 Claude에게 (Opus 5.5, 노력 수준 높게)
-```
-financial-rag-agent 저장소 docs/plans/ 의 세 팀원 계획을 단계별(0~12)로 비교해줘. 모든 답변은 한국어로.
-- 단계마다: 각자 선택, 근거 종류, 수치(같은 기준으로 잰 것만), 장단점을 표로
-- "공통으로 합의된 것"과 "쟁점"을 나눠줘
-- 쟁점마다 "어떤 실험 하나로 결론 낼 수 있는지" 제안해줘 (질문 세트·지표·고정 조건 포함)
-- 근거가 '문서·의견'뿐인 선택은 따로 표시해줘
-- 최종 결정은 하지 말고, 합의안 초안과 회의에서 물어볼 질문 목록으로 정리해서
-  docs/plans/조율_결과.md 에 써줘
-```
-
-## 실행 방법
-구현은 [docs/기획서.md](docs/기획서.md)를 그대로 따라요. 모든 명령은 **Git Bash**에서 저장소 루트에서 실행해요.
-
-### 0. 준비
+### 명령어로 실행
 ```bash
-python -m venv .venv
-source .venv/Scripts/activate            # macOS/Linux 는 source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env                     # .env 에 GEMINI_API_KEY 를 넣어요 (API 키 없이도 아래 "키 없이" 명령은 돌아가요)
-pytest                                   # 단위·엔드투엔드 테스트 (네트워크·API 를 쓰지 않아요)
-```
-
-### 1. 준비 파이프라인 (PDF → 쪽 레코드 → 표·그림 → 청크 → 색인)
-```bash
-python -m src.pipeline.build --config configs/baseline.json                 # 전체 (Gemini 그림·표 설명 + 임베딩, 키 필요)
-python -m src.pipeline.build --config configs/baseline.json --no-vlm        # 그림·표 Gemini 생략 (임베딩은 키 필요)
-python -m src.pipeline.build --config configs/baseline.json --no-vlm --no-index   # 키 없이 청크까지
-python -m src.pipeline.build --config configs/baseline.json --offline       # 가짜 AI·가짜 임베딩으로 끝까지 (키 불필요)
-python -m src.pipeline.build --config configs/baseline.json --no-vlm --no-index --variants all   # 청킹 실험용 3종 모두
-python -m src.sources.check                                                 # 정답 근거 ID 누락 확인 (0 이어야 해요)
-```
-산출물은 `data/`(git 제외): `pages.jsonl`, `sources.jsonl`, `figures.jsonl`, `figure_review.jsonl`(사람이 볼 그림), `chunks/*.jsonl`, `index/`(Chroma), `cache/`(Gemini·임베딩·형태소 캐시).
-캐시를 지우지 않으면 다시 돌려도 Gemini 비용이 들지 않아요.
-
-### 2. 평가 루프
-```bash
-# 키 없이: 가짜 AI 로 형식 확인 (결과는 runs/dry_{실험ID}/)
-python -m src.evaluation.run --config configs/baseline.json --sets positive,negative --dry-run --limit 5
-python -m src.evaluation.run --config configs/exp3_agent.json --sets positive,negative --dry-run --limit 5
-# 키 없이: 검색 지표만 (BM25 면 API 불필요)
-python -m src.evaluation.run --config configs/exp2b_bm25.json --sets positive,negative,life_guide,additional --retrieval-only
-# 키가 있을 때: 180문항 실제 실행 (질문마다 AI 약 2회 + 채점 1회)
+python -m src.pipeline.build --config configs/baseline.json --variants all   # PDF → 청크 → 색인 (처음 한 번, 수십 분)
+python -m src.sources.check                                                  # 정답 근거 누락 확인 (0이어야 함)
 python -m src.evaluation.run --config configs/baseline.json --sets positive,negative,life_guide,additional
+python -m src.evaluation.run --config configs/exp3_agent.json --sets positive,negative,life_guide,additional
 ```
-`runs/{실험ID}/`에 `config.json`(설정+기준 대비 diff+모델·프롬프트), `results.jsonl`, `scores.jsonl`, `summary.json`이 저장되고 `runs/experiments.jsonl`에 한 줄이 추가돼요. 같은 실험ID 폴더가 있으면 `--force` 없이는 멈춰요.
 
-### 3. 실험 (기준 대비 한 가지씩 바꾼 설정)
+**자주 쓰는 옵션**
+
+| 옵션 | 뜻 |
+|---|---|
+| `--config 파일` | 어떤 설정(기준·실험)으로 돌릴지 |
+| `--sets a,b` | 돌릴 질문 세트 (`positive`, `negative`, `life_guide`, `additional`, `golden`) |
+| `--limit N` | 세트마다 앞 N문항만 (시험용) |
+| `--retrieval-only` | 검색 지표만 계산, 답변 생성 안 함 (싸고 빠름) |
+| `--no-vlm` | 그림·표 이미지를 Gemini로 설명하는 단계 생략 |
+| `--offline` / `--dry-run` | 빌드 / 평가를 가짜 AI로 (키 없이 코드 점검용) |
+| `--force` | 같은 실험 ID 결과가 있어도 덮어쓰기 |
+
+> Gemini 응답·임베딩은 `data/cache/`에 저장돼서 **같은 내용은 다시 돌려도 비용이 들지 않아요.** 청크 글자가 한 글자라도 바뀌면 그 청크만 새로 임베딩해요.
+
+---
+
+## 2. 전체 흐름
+
+```
+[준비]  PDF 23개 → 읽기(펼침면·2단·노이즈 정리) → 표 정리 · 그림을 글로 → 정답 근거 연결
+                 → 청킹(용어·조항·제목 단위) → 임베딩 → Chroma + BM25 색인
+
+[실행]  질문 → 기본 RAG : 검색 → 근거 판단 → 답변
+             → Agent    : 판단(route) → 검색 → 근거 충분? → (부족하면 검색어 바꿔 재검색, 최대 2번)
+                          → 답변 → 인용·숫자 검사 → (실패하면 재작성 1번)
+
+[평가]  답변·인용·대응 행동 저장 → 채점 → 실패 원인 분류 → 실험끼리 비교
+```
+
+### 질문 세트와 검색 범위
+| 세트 | 문항 | 검색 범위 (`doc_type`) |
+|---|---|---|
+| 기본 positive | 60 | `glossary` + `terms` |
+| 기본 negative | 40 | `glossary` + `terms` |
+| 금융생활 positive | 20 | `life_guide` |
+| 추가 문서 positive | 60 | `additional` (보험약관 예시도 여기) |
+| 골든셋 (직접 작성) | 18 | 문항마다 |
+
+검색할 때 범위를 빠뜨리면 **실행이 멈춰요**(`ScopeRequiredError`). 세트마다 "답할 수 있는 범위"가 달라서예요.
+
+---
+
+## 3. 단계별 처리 기준
+
+라이브러리를 기본값 그대로 쓰지 않고 이 문서들에 맞게 바꾼 부분이에요. 모든 숫자는 [`configs/baseline.json`](configs/baseline.json)에서 바꿀 수 있어요.
+
+### 3-1. PDF 읽기 — pdfplumber + 직접 만든 규칙 ([`src/loading/loader.py`](src/loading/loader.py))
+pdfplumber 기본 `extract_text()`는 쪽 전체를 위→아래로 읽어서, 펼침면·2단 문서에서 문장이 섞여요. 그래서 글자 좌표를 보고 아래 규칙을 더했어요.
+
+| 문제 | 규칙 | 기준값 |
+|---|---|---|
+| 펼침면(A4 두 장이 한 쪽)에서 좌우가 섞임 | 좌/우 반쪽으로 나눠 읽기 (`page` 그대로, `half`=L/R) | 가로 > 세로 × **1.15** |
+| 2단 본문이 가로로 섞임 | 가운데 여백을 가로지르는 줄이 적으면 2단 → 좌단 먼저 | 가로지르는 줄 **30% 미만** |
+| 굵은 글씨 겹침 `1100..55%%` | 겹친 글자 제거 → `10.5%` | – |
+| 각주 위첨자 `16.5²)` → `16.52)` | 본문보다 아주 작은 숫자 삭제 | 본문 글자의 **0.65** 미만 |
+| 세로쓰기 라벨이 흩어짐 | `[세로] 가입불가`처럼 한 줄로 | 1~2글자 4개 이상 세로 연속 |
+| 머리말·꼬리말 반복 | 위·아래 3줄에서 반복되는 줄 삭제 | **30% 이상** 쪽, 3번 이상 |
+| 쪽 번호가 본문에 섞임 | 위·아래 여백의 1~3자리 숫자 삭제 | – |
+| 글자 깨짐 `(cid:123)` | 줄 앞은 `•`, 한글 사이는 `·`, 나머지 삭제 | – |
+
+**쪽 번호 기준**: 이 프로젝트의 "쪽"은 모두 **PDF 쪽 순서(1부터)**예요. 인쇄된 쪽 번호가 아니에요. 답변 출처 `(파일명 p.N)`도 같아요.
+
+### 3-2. 표 ([`src/tables/extract.py`](src/tables/extract.py))
+| 단계 | 내용 |
+|---|---|
+| 찾기 | pdfplumber `find_tables`를 두 설정으로 시도: 기본(선 있는 표) → 세로선만 있는 표 |
+| 손실 판정 | 원문 대비 **한글·숫자를 따로** 세어 하나라도 **90% 미만**이면 손실 |
+| 손실이면 | 합쳐진 칸의 글자를 걸친 칸 모두에 채우고, 비어 있는 행 머리글은 위 행 것을 반복 |
+| 그래도 손실이면 | Gemini가 표 이미지를 다시 읽음 |
+| 긴 표 | 행 단위로 나누고 머리글 반복 (1,200자) |
+
+→ 결과: 단순 표 56 · 칸을 채운 표 105 · Gemini로 넘긴 표 30
+
+### 3-3. 그림 ([`src/figures/`](src/figures))
+좌표로 그림 후보를 찾고 → 배너·배경·QR을 규칙으로 거르고 → Windows OCR(2배 확대)로 글자를 미리 읽은 뒤 → **Gemini(gemini-2.5-flash)가 종류를 먼저 고르고 그 종류에 맞게** 글로 바꿔요.
+
+| 종류 | 설명 방식 |
+|---|---|
+| 숫자 그래프·표·절차도 | 값을 **전부** 표 형식으로 |
+| 화면 캡처·일러스트 | **짧게 요약**, 안 보이는 글자는 쓰지 않음 |
+| 장식 | 청크 만들지 않음 |
+
+설명 속 숫자가 원문·OCR에 없으면 **"인용 주의"**를 붙이고, 답변에서 그 숫자는 단정하지 않아요. 설명이 비정상적으로 길면(반복 고장) 걸러요.
+
+### 3-4. 청킹 — 구조형이 기준 ([`src/chunking/structural.py`](src/chunking/structural.py))
+| 문서 | 자르는 방법 |
+|---|---|
+| 용어집 | 용어 1개 = 청크 1개 |
+| 약관 | 조항 1개 = 청크 1개. 1,200자가 넘으면 **①②항 경계에서만** 나누고 조 제목을 반복. 제목만 있는 조각은 만들지 않음 |
+| 가이드북·추가 | 글꼴 크기로 찾은 제목 단위. **100자 미만** 짧은 절은 이웃과 합침. 섹션 경로(문서 > 장 > 절) 저장 |
+| 표·그림 | 본문과 따로 청크. 그림이 표를 60% 이상 덮으면 표는 빼서 중복 방지 |
+
+청크마다 **정답 근거 ID**(채점용), **parent_id**(조항 전체·반쪽 페이지), **링크**(앞뒤 청크, "제7조에 따라" 같은 조항 참조, "그림 Ⅲ-9" 같은 그림 참조)가 붙어요. 기본 RAG는 청크만 쓰고, parent·링크는 Agent가 필요할 때만 펼쳐요.
+
+→ 결과: 1,508개 (용어집 228 · 약관 407 · 가이드북 144 · 추가 729), **정답 근거 누락 0**
+
+### 3-5. 임베딩·검색 ([`src/index/`](src/index), [`src/retrieval/`](src/retrieval))
+| 항목 | 값 |
+|---|---|
+| 임베딩 | gemini-embedding-001, 768차원, 청크의 `text` (제목 접두어 없음) |
+| 저장 | Chroma (청킹 방식별로 다른 색인 폴더) |
+| 단어 검색 | Kiwi 형태소 분석 + BM25 |
+| 합치기 | 하이브리드: 두 결과의 순위를 RRF(60)로 합침 |
+| 가져오는 개수 | k = 5 |
+
+### 3-6. 답변 ([`src/generation/`](src/generation), [`src/agent/`](src/agent))
+- 모델: gemini-2.5-flash, temperature 0
+- **근거 판단 → 답변** 2단계, 둘 다 JSON 출력
+- 대응 행동 7가지: `answer` · `answer_qualified` · `correct` · `clarify` · `abstain` · `defer_freshness` · `refuse`
+- 질문 속 "이전 지시를 무시하고…" 같은 **끼워 넣은 지시**는 걸러 낸 질문(`clean_query`)으로 검색
+- 근거에 없는 숫자 금지, 투자 권유 금지
+- Agent 끝내는 조건: 재검색 최대 2번, 재작성 최대 1번, AI 호출 최대 8번. 구조도는 [`docs/agent_graph.md`](docs/agent_graph.md)
+
+---
+
+## 4. 평가
+
+**검색이 틀렸는지, 답변이 틀렸는지를 나눠서** 채점해요.
+
+| 구분 | 지표 |
+|---|---|
+| 검색 | Hit@1·Hit@5, Recall@5, MRR (정답 근거가 있는 148문항) |
+| 답변 | 답변 점수 0~2 (채점 AI: gemini-2.5-pro), 필수 내용 포함률, 금지 내용 위반 |
+| 대응 | 행동 일치율 (7가지·5묶음), 과잉 거절률, 지시 끼워 넣기 대응률 |
+| 근거 | 인용 정확도 |
+| 비용 | AI 호출 수, 검색 횟수, 입력·출력 토큰, 시간 |
+
+**실패 원인**: 검색 실패 / 생성 오류 / 잘못된 거절 / 행동 불일치 / 환각 / 정답 없음
+
+**결과 저장**
+```
+runs/{실험ID}/config.json     설정 + 기준 대비 바뀐 항목
+              results.jsonl   문항별 답변·검색한 청크·인용·시간·토큰
+              scores.jsonl    문항별 점수·실패 원인
+              summary.json    세트별 평균·총비용
+runs/experiments.jsonl        실험 목록
+```
+
+---
+
+## 5. 실험
+
+기준 설정에서 **한 가지만** 바꿔 비교해요. 실험 설정 파일에는 바뀐 항목만 적혀 있어요.
+
 | 실험 | 설정 파일 | 바꾸는 것 |
 |---|---|---|
-| 기준 | `configs/baseline.json` | 구조형 청킹 · 하이브리드 k=5 · 기본 RAG |
-| 0 흔들림 | `configs/exp0_repeat.json` | 기준을 한 번 더 |
-| 1 청킹 | `exp1a_recursive_500_50.json` / `exp1b_parentchild.json` | 글자 수 자르기 / parent 펼치기 |
-| 2 검색 | `exp2a_vector.json` / `exp2b_bm25.json` | 뜻 검색만 / 단어 검색만 |
-| 3 RAG vs Agent | `exp3_agent.json` | 흐름만 Agent 그래프로 |
-| 4 제목 붙이기 | `exp4_embed_prefix.json` | 임베딩 대상 `text` → `embed_text` |
-실험 설정 파일에는 바꾸는 항목만 적어요(나머지는 baseline). 청킹이 다른 실험은 먼저 `--variants all` 로 청크를 만들어 두세요 (없으면 평가 때 자동으로 만들어요).
-골든셋은 `05_golden/golden_set.jsonl`에 사람이 쓰고(형식: `05_golden/golden_schema.json`), 설정을 확정한 뒤 `--sets golden` 으로 한 번만 평가해요.
+| 기준 | `baseline.json` | 구조형 청킹 · 하이브리드 k=5 · 기본 RAG |
+| 0 흔들림 | `exp0_repeat.json` | 기준을 한 번 더 (이 차이보다 작으면 "효과 없음") |
+| 1a 청킹 | `exp1a_recursive_500_50.json` | 글자 수 자르기 (500자, 겹침 50) |
+| 1b 청킹 | `exp1b_parentchild.json` | parent-child (child 400자로 찾고 parent로 묶음) |
+| 2a 검색 | `exp2a_vector.json` | 뜻 검색(벡터)만 |
+| 2b 검색 | `exp2b_bm25.json` | 단어 검색(BM25)만 |
+| 3 구조 | `exp3_agent.json` | 기본 RAG → Agent |
+| 4 문맥 | `exp4_embed_prefix.json` | 임베딩에 `[문서 > 장 > 절]` 붙이기 |
+| 마지막 | – | 설정 확정 후 골든셋으로 1번 |
 
-### 4. Agent 구조도
-```bash
-python -m src.agent.export               # LangGraph → Mermaid, docs/agent_graph.md 갱신
-```
+---
 
-## 폴더 구조
+## 6. 현재 상태와 알려진 한계
+
+**됨**: 전체 코드, 테스트 78개 통과, 정답 근거 누락 0, BM25 검색 Hit@5 0.851 (키 없이 측정)
+**진행 중**: 실제 Gemini로 빌드·시험 평가 · **할 일**: 실험 0~4 전체 실행, 골든셋 18문항 작성·검수
+
+**알려진 한계** (고칠 예정)
+- 각주 위첨자 기준 0.65가 작은 글씨로 적힌 진짜 숫자도 지워요 (예: 출처 줄 "2024년" → "년"). 0.60 이하로 낮출 예정
+- 글자 수 자르기의 겹침 50자가 PDF 한 줄(약 100자)보다 짧아 실제로는 겹치지 않아요. 실험 1a 해석 때 주의
+- 그림 숫자 검사는 OCR이 같이 틀린 값을 잡지 못해요 → 의심 그림은 사람 확인
+- 대응 행동 매핑 중 애매한 3건(NEG009·034·037)은 팀 확인 필요
+
+---
+
+## 7. 폴더 구조
+
 ```
 financial-rag-agent/
-├─ 01_data/        원본 PDF 23개            (수정 금지)
-├─ 02_questions/   질문 JSON 180문항        (수정 금지)
-├─ 03_answers/     기준 답안 MD·JSONL       (수정 금지)
-├─ src/            loading · tables · figures · sources · chunking · index · retrieval · generation · agent · evaluation · common · pipeline
-├─ configs/        baseline.json, behavior_map.json, 실험 설정 (exp*.json)
-├─ tests/          pytest (API 를 쓰지 않음)
-├─ 05_golden/      골든셋 형식 (내용은 사람이 작성)
-├─ data/ runs/     생성 결과 (git 제외)
-└─ docs/
-   ├─ 기획서.md                 구현 기준 문서
-   ├─ agent_graph.md            Agent 구조도 (자동 생성)
-   ├─ 과제_안내.md              과제 설명 원문
-   ├─ 구현_결정_체크리스트.md    단계별(0~12) 정할 것·보기·예시
-   └─ plans/                    팀원별 계획 문서와 조율 결과 (진행 방식 참고)
+├─ 01_data/  02_questions/  03_answers/   원본 PDF·질문·기준 답안 (수정 금지)
+├─ 05_golden/                             직접 만드는 골든셋
+├─ src/
+│  ├─ loading/  tables/  figures/         PDF 읽기 · 표 · 그림
+│  ├─ sources/  chunking/                 정답 근거 연결 · 청킹
+│  ├─ index/  retrieval/                  임베딩·색인 · 검색 도구
+│  ├─ generation/  agent/                 기본 RAG · LangGraph Agent
+│  ├─ evaluation/                         평가 루프·지표
+│  ├─ common/  pipeline/                  설정·스키마·Gemini 클라이언트 · 빌드 명령
+├─ configs/                               기준·실험 설정, 대응 행동 매핑
+├─ notebooks/                             전체 실행 노트북
+├─ tests/                                 테스트 (API 안 씀)
+├─ docs/                                  기획서·조율 결과·과제 안내·Agent 구조도
+├─ data/  runs/                           생성 결과·실행 기록 (git 제외)
+└─ code/noviz-domino/  chunks/jjh7757/    통합 전 참고 자료 (지금 코드와 별개)
 ```
 
-## 데이터 구성
-| 세트 | 문항 | 질문 파일 | 검색 대상 |
-|---|---|---|---|
-| 기본 positive | POS001~060 (60) | `positive_questions.json` | 용어집 + 표준약관 |
-| 기본 negative | NEG001~040 (40) | `negative_questions.json` | 용어집 + 표준약관 |
-| 금융생활 positive | POS061~080 (20) | `positive_life_guide_questions.json` | 금융생활 가이드북 |
-| 추가 문서 positive | ADD-* (60) | 문서별 `*_questions.json` | 추가 PDF 6개 |
+---
 
-| `01_data/` 경로 | 개수 | 내용 |
-|---|---|---|
-| `financial_glossary_readable.pdf` | 1 | 금융용어 정의 |
-| `standard_terms/` | 15 | 증권 매매·신용거래·연금저축·전자금융·해외투자 등 표준약관 |
-| `financial_life_guide.pdf` | 1 | 재무관리·저축·투자 가이드 (표·그래프 포함) |
-| `additional/` | 6 | 주택연금, 퇴직연금, 주택 정책금융, 자영업자 채무, 보험약관 예시, 정책서민금융·채무조정 |
+## 8. 협업 방식
 
-## 제출물 (과제 요구사항)
-- RAG 실험 계획: 목적·가설, 사용할 PDF·질문 세트, 비교 설정과 고정 조건, 평가 지표, 결과 기록 형식
-- Agent 그래프 구조도: 노드 역할, 흐름과 분기, 종료 조건
-- RAG Agent와 평가 루프 코드, 실행 방법
-- 사용한 PDF·질문 세트와 직접 작성·검수한 골든셋 (기준 답변·근거 포함)
-- 실행 기록, 비교 실험 결과, 실패 사례와 개선점
+```bash
+git switch main && git pull                 # 1. 최신 main 받기
+git switch -c {내 GitHub 아이디}             # 2. 처음 한 번: 내 브랜치 만들기 (이후엔 git switch 만)
+git merge main                              # 3. 작업 시작 전 main 최신 내용 가져오기
+git push -u origin {내 GitHub 아이디}        # 4. 작업 후 푸시 → main 으로 PR
+```
+- **브랜치는 사람당 하나**예요. 작업마다 새로 만들지 않고, main에 합친 뒤에도 같은 브랜치에서 이어서 해요.
+- main으로 PR을 올리면 **자동으로 승인·머지**돼요 ([`.github/workflows/auto-merge.yml`](.github/workflows/auto-merge.yml)). 아직 합치면 안 되는 PR은 **Draft**로 올려요.
+- 통합 전 개인 작업은 `backup/noviz-domino` 등 `backup/` 브랜치에 보관해요.
 
-## 팀 규칙
-1. **원본 데이터(`01_data/`, `02_questions/`, `03_answers/`)는 수정하지 않아요.** 가공한 결과는 별도 폴더에 저장해요.
-2. **질문·기준 답안은 검색 DB(인덱스)에 넣지 않아요.** 넣으면 평가가 의미 없어져요 (과제 조건).
-3. **기본 negative 세트의 "자료에 없음"은 용어집 + 표준약관만 검색할 때 기준이에요.** 세트마다 검색 범위를 구분해요.
-4. **직접 만든 골든셋은 제공 세트와 따로 평가해요.** 제공 세트로 설정을 고르고, 골든셋은 최종 확인용으로 써요.
-5. **API 키는 `.env`에만** 두고 올리지 않아요 (`.gitignore`에 등록돼 있어요).
+### 팀 규칙
+1. **원본 데이터(`01_data/`, `02_questions/`, `03_answers/`)는 수정하지 않아요.**
+2. **질문·기준 답안은 검색 색인에 넣지 않아요.** 넣으면 평가가 의미 없어져요.
+3. **세트마다 검색 범위를 지켜요.** 기본 negative의 "자료에 없음"은 용어집+약관만 검색할 때 기준이에요.
+4. **골든셋은 설정을 다 정한 뒤 한 번만** 평가해요.
+5. **API 키는 `.env`에만** 두고 커밋하지 않아요.
 
-## 결정 사항 (팀 논의 후 채우기)
-| 항목 | 결정 | 이유 | 날짜 |
-|---|---|---|---|
-| LLM / 임베딩 모델 | | | |
-| PDF 로딩·표·그림 처리 방식 | | | |
-| 청킹 전략 (기준 설정) | | | |
-| 벡터 DB / 검색 방식 | | | |
-| Agent 구조 | | | |
-| 평가 지표 | | | |
-| 결과 저장 형식 | | | |
-| 브랜치·코드 리뷰 방식 | | | |
+---
+
+## 9. 문서
+| 문서 | 내용 |
+|---|---|
+| [기획서](docs/기획서.md) | 설계 전체 (구현의 기준) |
+| [조율 결과](docs/plans/조율_결과.md) | 세 사람 구현을 비교해 기능별로 고른 근거 |
+| [과제 안내](docs/과제_안내.md) | 과제 원문과 제출물 |
+| [구현 결정 체크리스트](docs/구현_결정_체크리스트.md) | 단계별 결정 항목과 보기 |
+| [Agent 구조도](docs/agent_graph.md) | LangGraph 노드·분기 (코드에서 자동 생성) |
+| [개발 기록](docs/개발기록/README.md) | 결정·실험 계획(숫자를 고른 이유)·실험 결과·실패 사례 — **제출 문서 작성용 자료** |
