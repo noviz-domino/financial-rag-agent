@@ -276,15 +276,52 @@ financial-rag-agent/
 
 ## 8. 협업 방식
 
+### 작업 순서
 ```bash
 git switch main && git pull                 # 1. 최신 main 받기
-git switch -c {내 GitHub 아이디}             # 2. 처음 한 번: 내 브랜치 만들기 (이후엔 git switch 만)
+git switch -c {내 GitHub 아이디}             # 2. 처음 한 번: 내 브랜치 만들기 (이후엔 git switch {내 아이디})
 git merge main                              # 3. 작업 시작 전 main 최신 내용 가져오기
-git push -u origin {내 GitHub 아이디}        # 4. 작업 후 푸시 → main 으로 PR
+#  ... src/ · configs/ 수정 ...
+pytest                                      # 4. 깨진 게 없는지 확인 (API 안 씀, 몇 초)
+git add {고친 파일} && git commit -m "무엇을 했는지"
+git push -u origin {내 GitHub 아이디}        # 5. 푸시 → main 으로 PR (gh pr create --base main)
 ```
 - **브랜치는 사람당 하나**예요. 작업마다 새로 만들지 않고, main에 합친 뒤에도 같은 브랜치에서 이어서 해요.
-- **main 직접 푸시는 보호 규칙으로 막혀 있어요.** main으로 PR을 올리면 **자동으로 승인·머지**돼요 ([`.github/workflows/auto-merge.yml`](.github/workflows/auto-merge.yml)). 아직 합치면 안 되는 PR은 **Draft**로 올려요.
-- 통합 전 개인 작업은 `backup/noviz-domino` 등 `backup/` 브랜치에 보관해요.
+- **main 직접 푸시는 보호 규칙으로 막혀 있어요.** main으로 PR을 올리면 **자동으로 머지**돼요 ([`.github/workflows/auto-merge.yml`](.github/workflows/auto-merge.yml)). 팀원 3명이 이 저장소 브랜치에서 올린 PR만 자동 머지되고, 그 외 PR은 사람이 확인해요.
+- **커밋은 자주, PR은 기능 하나가 끝났을 때** 올려요. PR 설명은 3줄이면 충분해요: **무엇을 / 왜 / 어떻게 확인했는지**.
+- 통합 전 개인 작업은 `backup/` 브랜치(예: `backup/noviz-domino`)에 보관해요.
+
+### 리뷰가 필요할 때: Draft PR
+**Draft PR = "아직 작업 중, 합치지 마세요" 표시가 붙은 PR**이에요. 머지 버튼과 자동 머지가 막혀요.
+- 핵심 로직(청킹·검색·Agent·평가)을 바꿨거나 의견이 필요하면 Draft로 올리고 팀원에게 "봐 줘"라고 요청해요.
+- 만들기: PR 만들 때 초록 버튼 옆 ▾ → **Create draft pull request** (또는 `gh pr create --base main --draft`)
+- 준비되면 PR 페이지에서 **Ready for review** → 자동 머지돼요.
+- 리뷰하는 사람: PR의 **Files changed** → 의견은 줄마다 댓글, 괜찮으면 **Review changes → Approve**.
+
+### 어디를 고치나요
+**로직은 `src/`의 `.py`, 숫자 설정은 `configs/`, 노트북은 실행해서 결과를 보는 곳**이에요.
+노트북은 `src/`의 함수를 불러와 실행할 뿐이라, 노트북 안에서 코드를 고쳐도 실제 프로그램에는 반영되지 않아요. 노트북에서 시험해 보고 마음에 들면 그 변경을 `src/`·`configs/`에 옮겨 적어요.
+
+| 바꾸고 싶은 것 | 고칠 곳 |
+|---|---|
+| 숫자 기준 (청크 크기, k, 위첨자 기준, 모델 이름 등) | `configs/baseline.json` · 실험은 `configs/exp*.json` 새로 만들기 (바뀐 항목만 적음) |
+| PDF 읽기 규칙 | `src/loading/loader.py` |
+| 표 처리 | `src/tables/extract.py` |
+| 그림 설명·검사 | `src/figures/` |
+| 청킹 규칙 | `src/chunking/structural.py` (글자 수 자르기는 `common.py`) |
+| 임베딩·검색 | `src/index/`, `src/retrieval/search.py` |
+| 답변 프롬프트 | `src/generation/prompts.py` |
+| Agent 흐름 | `src/agent/graph.py` (바꾸면 `python -m src.agent.export`로 구조도 갱신) |
+| 채점·지표 | `src/evaluation/metrics.py`, `judge.py` |
+| 대응 행동 매핑 | `configs/behavior_map.json` |
+| 노트북 설명 글 | `notebooks/금융_RAG_Agent_전체실행.ipynb` |
+
+로직을 바꾸면 **테스트도 같이** 추가하거나 고쳐요 (`tests/`). 결정한 내용과 이유는 [`docs/개발기록/02_결정_기록.md`](docs/개발기록/02_결정_기록.md)에, 실험 결과는 `04_실험_결과.md`에 한 줄씩 남겨요. 제출 문서를 쓸 때 이 기록을 그대로 써요.
+
+### 처음 한 번 해 둘 설정
+- **알림 줄이기**: 저장소 오른쪽 위 **Watch ▾ → Participating and @mentions** (PR마다 메일이 오는 걸 줄여요. 각자 설정)
+- **2단계 인증**: GitHub Settings → Password and authentication (공개 저장소라 계정 보안이 중요해요)
+- **git 이름 확인**: `git config --global user.name` 이 GitHub 아이디인지 (커밋 기록에 공개돼요)
 
 ### 팀 규칙
 1. **원본 데이터(`01_data/`, `02_questions/`, `03_answers/`)는 수정하지 않아요.**
