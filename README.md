@@ -12,6 +12,9 @@
 > ```
 > 브랜치는 **사람당 하나**를 계속 써요. 아직 합치면 안 되는 작업은 PR을 **Draft**로 올려요. 자세한 건 [8. 협업 방식](#8-협업-방식).
 
+> [!TIP]
+> **이어서 작업하는 사람은 [`docs/개발기록/00_현재_상태와_다음_할일.md`](docs/개발기록/00_현재_상태와_다음_할일.md)부터 읽어요.** 어디까지 했는지, 무엇을 결정해야 하는지, 시작·마무리하는 법이 있어요. 작업을 마칠 때는 그 파일을 갱신해서 PR에 같이 올려요.
+
 > [!CAUTION]
 > **이 저장소는 공개(public)예요. 누구나 모든 파일과 커밋 기록을 볼 수 있어요.**
 > 1. **민감정보는 절대 올리지 않아요** — API 키, 토큰, 비밀번호, `.env`, 개인 연락처·주민번호 같은 개인정보.
@@ -90,6 +93,20 @@ python -m src.evaluation.run --config configs/exp3_agent.json --sets positive,ne
 | `--force` | 같은 실험 ID 결과가 있어도 덮어쓰기 |
 
 > Gemini 응답·임베딩은 `data/cache/`에 저장돼서 **같은 내용은 다시 돌려도 비용이 들지 않아요.** 청크 글자가 한 글자라도 바뀌면 그 청크만 새로 임베딩해요.
+
+### 임베딩·캐시를 팀이 같이 쓰기 (비용을 다시 내지 않으려면)
+처음 빌드(그림 설명 약 40분 + 임베딩)는 한 사람이 한 번만 하고, 나머지는 결과물을 받아서 써요.
+```bash
+# 만든 사람: data/ 의 캐시·색인·청크·그림 설명을 zip 으로 묶기 (dist/ 는 git 에 안 올라가요, 파일 하나 최대 1.9GB 로 자동 분할)
+python -m src.pipeline.artifacts export --tag baseline
+#   → 끝에 GitHub Release 로 올리는 명령이 그대로 출력돼요 (직접 실행해야 올라가요):
+#   gh release create data-v1 dist/artifacts_YYYYMMDD-HHMM_baseline_part01.zip ... --title "..." --notes "..."
+
+# 받는 사람: Release 에서 zip 을 모두 받아 dist/ 에 두고
+gh release download data-v1 --dir dist            # (또는 웹에서 내려받기)
+python -m src.pipeline.artifacts import dist/artifacts_*_part*.zip --config configs/baseline.json
+```
+`import` 는 묶음의 `manifest.json` 으로 **낡았는지 확인**해요: 파일 손상(sha256), part 누락, 원본 PDF 변경, 현재 설정의 청킹·임베딩 모델 색인이 묶음에 없음, 그림·표 설정 변경. 하나라도 걸리면 이유를 보여 주고 멈추며, 그래도 풀려면 `--force`. 풀고 나서 `build --reuse` 를 다시 돌려도 새 임베딩 호출이 **0번**이어야 해요(캐시 적중).
 
 ---
 
@@ -340,4 +357,5 @@ git push -u origin {내 GitHub 아이디}        # 5. 푸시 → main 으로 PR 
 | [과제 안내](docs/과제_안내.md) | 과제 원문과 제출물 |
 | [구현 결정 체크리스트](docs/구현_결정_체크리스트.md) | 단계별 결정 항목과 보기 |
 | [Agent 구조도](docs/agent_graph.md) | LangGraph 노드·분기 (코드에서 자동 생성) |
+| [현재 상태와 다음 할 일](docs/개발기록/00_현재_상태와_다음_할일.md) | **인계 문서** — 진행 상황, 결정할 것, 이어받는 법 |
 | [개발 기록](docs/개발기록/README.md) | 결정·실험 계획(숫자를 고른 이유)·실험 결과·실패 사례 — **제출 문서 작성용 자료** |

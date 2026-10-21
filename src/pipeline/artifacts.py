@@ -219,7 +219,7 @@ def import_(zips: list[Path], d: Path, pdf_root: Path, cfg: dict | None = None, 
 
 def release_command(paths: list[Path], tag: str) -> str:
     files = " ".join(f'"{p.as_posix()}"' for p in paths)
-    return (f'gh release create {tag or "data-v1"} {files} --title "임베딩·캐시 산출물 {tag or "data-v1"}" '
+    return (f'gh release create {("data-" + tag) if tag else "data-v1"} {files} --title "임베딩·캐시 산출물 {tag or "data-v1"}" '
             f'--notes "python -m src.pipeline.artifacts import 로 data/ 에 풀어요 (README 1장 참고)"')
 
 
