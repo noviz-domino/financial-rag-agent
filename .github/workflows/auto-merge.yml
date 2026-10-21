@@ -1,5 +1,8 @@
 # PR이 열리면 GitHub가 자동으로 승인하고 main에 머지해요. (GitHub 서버에서 실행)
-# Draft PR은 건너뛰어요. 이미 열린 PR은 Actions → auto-merge → Run workflow 로 한 번에 머지해요.
+# - 팀원 3명(TEAM)이 이 저장소 안의 브랜치에서 올린 PR만 자동 머지해요.
+#   포크에서 온 PR이나 팀원이 아닌 사람의 PR은 건너뛰어요 → 사람이 직접 확인하고 머지.
+# - Draft PR은 건너뛰어요. 이미 열린 PR은 Actions → auto-merge → Run workflow 로 한 번에 머지해요.
+# - 팀원이 바뀌면 아래 TEAM 목록만 고치면 돼요.
 name: auto-merge
 
 on:
@@ -12,12 +15,19 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  TEAM: "noviz-domino jjh7757 yellowgreenbean"
+
 jobs:
   merge:
     runs-on: ubuntu-latest
     steps:
-      - name: 새 PR 승인·머지
-        if: github.event_name == 'pull_request_target' && github.event.pull_request.draft == false
+      - name: 새 PR 승인·머지 (팀원 + 같은 저장소 브랜치만)
+        if: >-
+          github.event_name == 'pull_request_target' &&
+          github.event.pull_request.draft == false &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          contains(fromJSON('["noviz-domino","jjh7757","yellowgreenbean"]'), github.event.pull_request.user.login)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
@@ -25,12 +35,19 @@ jobs:
           gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --approve || true
           gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge
 
-      - name: 열려 있는 PR 전부 머지 (수동 실행)
+      - name: 열려 있는 PR 전부 머지 (수동 실행, 팀원 + 같은 저장소 브랜치만)
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for n in $(gh pr list --repo "$GITHUB_REPOSITORY" --base main --state open --json number,isDraft --jq 'sort_by(.number) | .[] | select(.isDraft | not) | .number'); do
+          for row in $(gh pr list --repo "$GITHUB_REPOSITORY" --base main --state open \
+                --json number,isDraft,author,isCrossRepository \
+                --jq 'sort_by(.number) | .[] | select((.isDraft | not) and (.isCrossRepository | not)) | "\(.number):\(.author.login)"'); do
+            n="${row%%:*}"; who="${row#*:}"
+            case " $TEAM " in
+              *" $who "*) ;;
+              *) echo "PR #$n 건너뜀: 팀원이 아님 ($who)"; continue ;;
+            esac
             gh pr review "$n" --repo "$GITHUB_REPOSITORY" --approve || true
             gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --merge || echo "PR #$n 머지 실패 (충돌 확인 필요)"
           done
