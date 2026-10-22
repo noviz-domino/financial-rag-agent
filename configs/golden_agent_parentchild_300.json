@@ -1,0 +1,9 @@
+{
+  "_note": "골든셋 평가 전 고정. 과거 검색 Hit@5, 동률 시 Recall@5 기준 상위 3개 설정에 현재 Agent 적용. 결과를 보고 설정을 재조정하지 않는다.",
+  "exp_id": "golden_agent_parentchild_300_20261022",
+  "description": "통합 골든셋 21문항: 현재 Agent + parent-child 300자, hybrid k=5",
+  "pipeline": "agent",
+  "chunking": {"strategy": "parentchild", "child_max": 300},
+  "retrieval": {"parent_fold": true},
+  "evaluation": {"sets": ["golden"]}
+}

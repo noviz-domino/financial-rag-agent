@@ -28,7 +28,7 @@ from src.common.llm import make_client
 from src.common.schemas import RunResult
 from src.evaluation import metrics as M
 from src.evaluation.dataset import load_set, read_jsonl
-from src.evaluation.judge import score_answer
+from src.evaluation.judge import JUDGE_CONTEXT_VERSION, score_answer
 from src.generation import prompts as P
 
 
@@ -119,7 +119,7 @@ def write_config(out_dir: Path, exp_id, cfg, dry_run, sets, ret_only, chunk_stat
            "models": {"generation": cfg["llm"]["model"], "judge": cfg["llm"]["judge_model"],
                       "embedding": cfg["retrieval"]["embed_model"], "figure_vlm": cfg["figures"]["model"]},
            "prompts": P.all_prompts(), "prompt_version": P.prompt_version(), "chunks": chunk_stats,
-           "versions": _versions(), "git_commit": _git_commit()}
+           "versions": _versions(), "git_commit": _git_commit(), "judge_context_version": JUDGE_CONTEXT_VERSION}
     (out_dir / "config.json").write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
     return rec
 
@@ -192,14 +192,23 @@ def main(argv=None):
                    "retrieved": [], "queries": [], "trace": [], "usage": {"llm_calls": 0, "cached_calls": 0,
                    "search_calls": 0, "tokens_in": 0, "tokens_out": 0, "elapsed": round(time.time() - t0, 3)}}
             err = f"{type(e).__name__}: {e}"
-        return case, out, err
+        # 생성뿐 아니라 채점까지 문항별 worker에서 실행한다. 메인 스레드는
+        # 입력 순서로 파일을 저장하므로 결과 형식과 순서는 그대로다.
+        try:
+            row = score_case(case, out, bm, id2pages, client, cfg, with_answer=not a.retrieval_only)
+        except Exception as e:  # noqa: BLE001
+            row = {"case_id": case["case_id"], "set": case["set"], "usage": out["usage"], "retrieval": None,
+                   "failure": "error", "error": f"{type(e).__name__}: {e}"}
+        if err:
+            row["failure"], row["error"] = "error", err
+        return case, out, err, row
 
     results_f = open(out_dir / "results.jsonl", "w", encoding="utf-8")
     scores_f = open(out_dir / "scores.jsonl", "w", encoding="utf-8")
     rows, errors = [], 0
     t_all = time.time()
     with ThreadPoolExecutor(max_workers=max(1, a.workers)) as pool:
-        for n, (case, out, err) in enumerate(pool.map(work, cases), start=1):
+        for n, (case, out, err, row) in enumerate(pool.map(work, cases), start=1):
             rr = RunResult(exp_id=exp_id, case_id=case["case_id"], set=case["set"], question=case["question"],
                            scope=case["scope"], pipeline=cfg["pipeline"], answer=out["answer"],
                            behavior=out["behavior"], citations=out["citations"], injection=out.get("injection", False),
@@ -212,15 +221,9 @@ def main(argv=None):
                 errors += 1
                 print(f"  [오류] {case['case_id']}: {err}")
             results_f.write(json.dumps(rr, ensure_ascii=False) + "\n")
-            try:
-                row = score_case(case, out, bm, id2pages, client, cfg, with_answer=not a.retrieval_only)
-            except Exception as e:  # noqa: BLE001
-                row = {"case_id": case["case_id"], "set": case["set"], "usage": out["usage"], "retrieval": None,
-                       "failure": "error", "error": f"{type(e).__name__}: {e}"}
+            if row.get("error") and not err:
                 errors += 1
-                print(f"  [채점 오류] {case['case_id']}: {e}")
-            if err:
-                row["failure"], row["error"] = "error", err
+                print(f"  [채점 오류] {case['case_id']}: {row['error']}")
             scores_f.write(json.dumps(row, ensure_ascii=False) + "\n")
             results_f.flush()
             scores_f.flush()
