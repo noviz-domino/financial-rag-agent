@@ -5,10 +5,17 @@ from __future__ import annotations
 from src.common.llm import use_meter
 from src.generation import prompts as P
 
+JUDGE_CONTEXT_VERSION = "full-retrieved-v2"
+
 
 def score_answer(client, cfg: dict, case: dict, answer: str, retrieved: list[dict], ai_include: list[str],
                  ai_not: list[str]) -> dict:
-    ctx_text = "\n".join(f"[{r['file']} p.{r['pages'][0]}] {r['text'][:400]}" for r in retrieved[:5]) or "(없음)"
+    # 부모 청크의 뒤쪽 조항·표도 근거다. 앞 400자만 주면 실제 근거가
+    # 있는데도 환각으로 오판하므로 검색 결과 전체와 모든 PDF 쪽을 보존한다.
+    ctx_text = "\n\n".join(
+        f"[{r['file']} p.{','.join(str(p) for p in r['pages'])}]\n{r['text']}"
+        for r in retrieved
+    ) or "(없음)"
     prompt = P.SCORE_PROMPT.format(question=case["question"], reference=case.get("reference_answer", ""),
                                    answer=answer or "(빈 답변)", must_include=ai_include or "(없음)",
                                    must_not=ai_not or "(없음)", context=ctx_text)
