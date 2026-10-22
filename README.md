@@ -214,7 +214,7 @@ pdfplumber 기본 `extract_text()`는 쪽 전체를 위→아래로 읽어서, �
 - 대응 행동 7가지: `answer` · `answer_qualified` · `correct` · `clarify` · `abstain` · `defer_freshness` · `refuse`
 - 질문 속 "이전 지시를 무시하고…" 같은 **끼워 넣은 지시**는 걸러 낸 질문(`clean_query`)으로 검색
 - 근거에 없는 숫자 금지, 투자 권유 금지
-- Agent: **검색 먼저 → 검색 결과를 보고 한 번에 판단** (D34). 끝내는 조건: 재검색 최대 2번, 재작성 최대 1번, AI 호출 최대 7번. 구조도는 [`docs/agent_graph.md`](docs/agent_graph.md)
+- Agent: **검색 먼저 → 검색 결과를 보고 한 번에 판단** (D34). 끝내는 조건: 재검색 최대 2번, 재작성 최대 1번, AI 호출 최대 7번. 구조도는 [`docs/agent_graph.md`](docs/agent_graph.md) (설명판: [`docs/agent_구조도.md`](docs/agent_구조도.md))
 
 ---
 
@@ -368,5 +368,6 @@ git push -u origin {내 GitHub 아이디}        # 5. 푸시 → main 으로 PR 
 | [과제 안내](docs/과제_안내.md) | 과제 원문과 제출물 |
 | [구현 결정 체크리스트](docs/구현_결정_체크리스트.md) | 단계별 결정 항목과 보기 |
 | [Agent 구조도](docs/agent_graph.md) | LangGraph 노드·분기 (코드에서 자동 생성) |
+| [Agent 구조도 설명판](docs/agent_구조도.md) | 분기 조건·AI 호출 수·이전 구조와 차이·현재 성능 (사람이 읽기용) |
 | [현재 상태와 다음 할 일](docs/개발기록/00_현재_상태와_다음_할일.md) | **인계 문서** — 진행 상황, 결정할 것, 이어받는 법 |
 | [개발 기록](docs/개발기록/README.md) | 결정·실험 계획(숫자를 고른 이유)·실험 결과·실패 사례 — **제출 문서 작성용 자료** |
