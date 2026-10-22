@@ -84,6 +84,31 @@ def test_verify_passes_answer_citing_without_pdf():
     assert verify_answer("365로 나눠요 (07_대고객환매조건부매매약관 p.1)", "answer", [], ctx) == []
 
 
+FX = "15_유사해외통화선물(FX Margin Trading) 거래약관.pdf"
+
+
+def test_filename_with_parentheses():
+    """F14 남은 경우 (R5 POS052): 파일명 자체에 괄호가 있으면 출처 괄호가 안쪽에서 끊겨 '15' 가 본문 숫자로 잡혔다.
+    실제 파일 이름(citations·검색 결과)을 본문에서 먼저 지우고 검사한다."""
+    ans = "증거금은 거래 전에 내야 해요 (15_유사해외통화선물(FX Margin Trading) 거래약관 p.3)"
+    assert M.unsupported_numbers(ans, "증거금을 예탁") == ["15"]                      # 파일 이름을 모르면 예전처럼 잡힘
+    assert M.unsupported_numbers(ans, "증거금을 예탁", files=[FX]) == []
+    assert M.parse_citations(ans, [], files=[FX]) == [(FX, 3)]
+    assert M.parse_citations(ans, [{"file": FX, "page": 3}]) == [(FX, 3)]            # citations 의 파일 이름도 씀
+    # 출처 괄호 밖에서 파일 이름만 말해도 파일 번호는 검사하지 않음, 다른 숫자는 그대로 검사
+    assert M.unsupported_numbers(f"{FX[:-4]}에 따르면 한도 700만원 (a.pdf p.1)", "한도 600만원", files=[FX]) == ["700"]
+    # 이름이 겹치면 긴 것부터: 'a_1' 이 'a_12' 를 쪼개지 않음
+    assert M.parse_citations("(a_12 p.2)", [], files=["a_1.pdf", "a_12.pdf"]) == [("a_12.pdf", 2)]
+
+
+def test_verify_passes_filename_with_parentheses():
+    from src.agent.verify import verify_answer
+    ctx = [{"file": FX, "pages": [3], "text": "증거금을 예탁하여야 한다"}]
+    ans = "증거금을 먼저 맡겨야 해요 (15_유사해외통화선물(FX Margin Trading) 거래약관 p.3)"
+    assert verify_answer(ans, "answer", [], ctx) == []
+    assert verify_answer(ans, "answer", [{"file": FX, "page": 3}], ctx) == []
+
+
 @pytest.mark.parametrize("m,want", [
     ({"expected5": "answer", "pred5": "answer", "id_hit5": 0.0, "score": 2}, "retrieval_fail"),
     ({"expected5": "answer", "pred5": "abstain", "id_hit5": 1.0, "score": 0}, "wrong_refusal"),
@@ -169,8 +194,11 @@ def test_retrieval_only_needs_no_ai(tmp_path):
     assert s["overall"]["id_hit5"] == 1.0 and s["overall"]["cost"]["llm_calls"] == 0
 
 
-def test_golden_set_empty_template_ok(cfg):
-    assert load_set("golden", cfg) == []                                    # 사람이 쓰기 전에는 비어 있어도 오류 아님
+def test_golden_set_empty_template_ok(cfg, tmp_path):
+    golden = tmp_path / "golden_set.jsonl"
+    write_jsonl(golden, [])
+    cfg = {**cfg, "paths": {**cfg["paths"], "golden": str(golden)}}
+    assert load_set("golden", cfg) == []                                    # 실제 골든셋 내용과 무관하게 빈 파일 지원 확인
     with pytest.raises(KeyError):
         load_set("nope", cfg)
 
@@ -180,3 +208,25 @@ def test_real_question_sets_load_and_scopes(cfg):
     assert [len(v) for v in sets.values()] == [60, 40, 20, 60]
     assert sets["positive"][0]["scope"] == ["glossary", "terms"] and sets["additional"][0]["scope"] == ["additional"]
     assert sum(1 for v in sets.values() for c in v if c["expected_source_ids"]) == 148
+
+
+def test_judge_keeps_evidence_after_400_chars_and_all_pages(cfg):
+    from types import SimpleNamespace
+    from src.evaluation.judge import score_answer
+
+    class CaptureClient:
+        def call(self, task, model, prompt, **kwargs):
+            self.prompt = prompt
+            return SimpleNamespace(data={"score": 2, "must_include": [], "must_not": [],
+                                         "hallucination": False})
+
+    client = CaptureClient()
+    retrieved = [{"file": "parent.pdf", "pages": [3, 4],
+                  "text": "앞부분 " * 200 + "뒤쪽 근거: 처분대금은 비용부터 충당"}]
+    retrieved += [{"file": f"extra{i}.pdf", "pages": [i], "text": f"추가 근거 {i}"}
+                  for i in range(1, 6)]
+    score_answer(client, cfg, {"question": "충당 순서는?", "reference_answer": "비용부터"},
+                 "비용부터", retrieved, [], [])
+    assert "뒤쪽 근거: 처분대금은 비용부터 충당" in client.prompt
+    assert "[parent.pdf p.3,4]" in client.prompt
+    assert "추가 근거 5" in client.prompt
