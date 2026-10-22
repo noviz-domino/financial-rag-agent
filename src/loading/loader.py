@@ -3,7 +3,7 @@
 출처: noviz loader.py (pymupdf4llm 합치기·VLM 부분 제외). 새로 넣은 규칙: cid·특수 글리프 복구, 쪽 번호 제거.
 
   ① 펼침면 분리 (가로 > 세로 x 1.15 → 좌/우 반쪽, page 는 그대로·half 만 L/R)
-  ② 굵은 글씨 겹침 복원 → 세로 글자 한 줄로 보존 → 쪽 번호 제거 → 각주 풀이를 본문 번호 자리에 '(풀이)' 로 (D37)
+  ② 굵은 글씨 겹침 복원 → 세로 글자 한 줄로 보존 → 쪽 번호 제거 → 각주 풀이를 본문 번호 자리에 '(풀이)' 로 (D38)
   ③ 표 (src/tables) ④ 2단이면 좌단 → 우단 순서  ⑤ 머리말·꼬리말(위·아래 3줄에서 30% 이상 반복) 제거
 출력: data/pages.jsonl — file, doc_type, page, half, printed_page, text, tables[], figure_lines[], has_text_layer
 """
@@ -226,7 +226,7 @@ def norm_line(line):
 
 
 def drop_superscripts(region, ratio=0.65):
-    """(예전 규칙, 파이프라인에서는 src/loading/footnotes.py 로 바뀜 — D37) 쪽 중앙값 x ratio 미만의 숫자·괄호를 지움.
+    """(예전 규칙, 파이프라인에서는 src/loading/footnotes.py 로 바뀜 — D38) 쪽 중앙값 x ratio 미만의 숫자·괄호를 지움.
     각주 번호(본문의 약 0.75배)는 못 지우고 차트 축 숫자·출처 줄 '2024'는 지우는 문제가 있었다 (F1)."""
     sizes = sorted(c["size"] for c in region.chars)
     if not sizes:
@@ -246,7 +246,7 @@ def process_region(page_no, half, region, cfg=None):
     region = drop_chars_in(region, [b for b, _ in vruns])
     fc = lc.get("footnote", {})
     n_fn = n_fn_unmatched = 0
-    if fc.get("enabled", True):                         # 각주 풀이를 본문 번호 자리에 '(풀이)' 로 (D37)
+    if fc.get("enabled", True):                         # 각주 풀이를 본문 번호 자리에 '(풀이)' 로 (D38)
         region, n_fn, n_fn_unmatched = inline_footnotes(region, fc.get("marker_ratio", 0.85), fc.get("raise_pt", 1.0))
     else:
         region = drop_superscripts(region, lc.get("superscript_ratio", 0.65))

@@ -58,7 +58,7 @@ def test_superscript_ratio_function_exists():
     assert callable(drop_superscripts)
 
 
-# ---- 각주 풀이를 본문 번호 자리에 (D37)
+# ---- 각주 풀이를 본문 번호 자리에 (D38)
 
 
 def _ch(text, x0, top, size=9.5, raised=0.0):
