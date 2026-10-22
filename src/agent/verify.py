@@ -17,14 +17,15 @@ def verify_answer(answer: str, behavior: str, citations: list[dict], context: li
     if behavior not in CITING:
         return []
     errors = []
-    cites = parse_citations(answer, citations)
+    files = [c["file"] for c in citations or []] + [r["file"] for r in context]
+    cites = parse_citations(answer, citations, files)
     if not cites:
         errors.append("출처 (파일명 p.N) 가 없음")
     ctx_pages = {(r["file"], p) for r in context for p in r["pages"]}
     bad = [f"{f} p.{p}" for f, p in cites if (f, p) not in ctx_pages]
     if bad:
         errors.append("검색 결과에 없는 출처: " + ", ".join(bad))
-    nums = unsupported_numbers(answer, " ".join(r["text"] for r in context), question)
+    nums = unsupported_numbers(answer, " ".join(r["text"] for r in context), question, files)
     if nums:
         errors.append("근거에 없는 숫자: " + ", ".join(nums[:8]))
     return errors

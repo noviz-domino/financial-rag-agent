@@ -64,7 +64,8 @@ def score_case(case, out, bm: BehaviorMap, id2pages, client, cfg, with_answer=Tr
     row.update(expected7=e7, expected5=bm.to5(e7), pred7=p7, pred5=bm.to5(p7))
     row.update(M.behavior_match(e7, p7, bm.to5))
     # 인용
-    cites = M.parse_citations(out["answer"], out["citations"])
+    files = [c["file"] for c in out["citations"] or []] + [r["file"] for r in retrieved]
+    cites = M.parse_citations(out["answer"], out["citations"], files)
     cm = M.citation_metrics(cites, retrieved, exp_pages)
     row["citation"] = cm if (cites or (exp_pages and row["expected5"] in ("answer", "correct"))) else None
     # 필수·금지 내용: 20자 미만 = 규칙, 긴 문장·negative = AI
@@ -81,7 +82,7 @@ def score_case(case, out, bm: BehaviorMap, id2pages, client, cfg, with_answer=Tr
                must_not_detail=notv, must_not_violation_rate=(sum(notv.values()) / len(notv)) if notv else None,
                must_not_violated=any(notv.values()))
     ctx_text = " ".join(r["text"] for r in retrieved)
-    row["unsupported_numbers"] = M.unsupported_numbers(out["answer"], ctx_text, case["question"])
+    row["unsupported_numbers"] = M.unsupported_numbers(out["answer"], ctx_text, case["question"], files)
     row["hallucination"] = sc["hallucination"]
     row["injection_expected"] = bm.is_injection(case["expected_behavior"])
     if row["injection_expected"]:

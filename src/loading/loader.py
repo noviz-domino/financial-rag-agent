@@ -3,7 +3,7 @@
 출처: noviz loader.py (pymupdf4llm 합치기·VLM 부분 제외). 새로 넣은 규칙: cid·특수 글리프 복구, 쪽 번호 제거.
 
   ① 펼침면 분리 (가로 > 세로 x 1.15 → 좌/우 반쪽, page 는 그대로·half 만 L/R)
-  ② 굵은 글씨 겹침 복원 → 세로 글자 한 줄로 보존 → 각주 위첨자(본문 65% 미만 숫자) 제거 → 쪽 번호 제거
+  ② 굵은 글씨 겹침 복원 → 세로 글자 한 줄로 보존 → 쪽 번호 제거 → 각주 풀이를 본문 번호 자리에 '(풀이)' 로 (D38)
   ③ 표 (src/tables) ④ 2단이면 좌단 → 우단 순서  ⑤ 머리말·꼬리말(위·아래 3줄에서 30% 이상 반복) 제거
 출력: data/pages.jsonl — file, doc_type, page, half, printed_page, text, tables[], figure_lines[], has_text_layer
 """
@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pdfplumber
 
+from src.loading.footnotes import inline_footnotes
 from src.tables.extract import attach_vertical_labels, extract_tables
 
 NUM_TOKEN = re.compile(r"^[\(\[]?[-+~]?[\d.,]*\d[\d.,]*[%p]?[\)\]]?$|^\(?[%‰]\)?$|^\((조|억|만)?원\)$|^\(%p?\)$")
@@ -225,7 +226,8 @@ def norm_line(line):
 
 
 def drop_superscripts(region, ratio=0.65):
-    """각주 번호 같은 위첨자(본문 글자보다 훨씬 작은 숫자·괄호) 제거. '16.5²)' → '16.5'"""
+    """(예전 규칙, 파이프라인에서는 src/loading/footnotes.py 로 바뀜 — D38) 쪽 중앙값 x ratio 미만의 숫자·괄호를 지움.
+    각주 번호(본문의 약 0.75배)는 못 지우고 차트 축 숫자·출처 줄 '2024'는 지우는 문제가 있었다 (F1)."""
     sizes = sorted(c["size"] for c in region.chars)
     if not sizes:
         return region
@@ -241,7 +243,13 @@ def process_region(page_no, half, region, cfg=None):
     printed = printed_page_of(region)
     vruns = vertical_runs(region)
     region = drop_page_numbers(region)
-    region = drop_superscripts(drop_chars_in(region, [b for b, _ in vruns]), lc.get("superscript_ratio", 0.65))
+    region = drop_chars_in(region, [b for b, _ in vruns])
+    fc = lc.get("footnote", {})
+    n_fn = n_fn_unmatched = 0
+    if fc.get("enabled", True):                         # 각주 풀이를 본문 번호 자리에 '(풀이)' 로 (D38)
+        region, n_fn, n_fn_unmatched = inline_footnotes(region, fc.get("marker_ratio", 0.85), fc.get("raise_pt", 1.0))
+    else:
+        region = drop_superscripts(region, lc.get("superscript_ratio", 0.65))
     tables = attach_vertical_labels(extract_tables(region, tc.get("loss_threshold", 0.9)), vruns)
     # 깨끗하게(simple·filled) 뽑힌 표만 본문에서 빼고 Markdown 으로 대체. lossy 표는 본문을 그대로 두어 손실·중복을 막는다
     body = drop_chars_in(region, [t["bbox"] for t in tables if not t["lossy"]])
@@ -258,7 +266,7 @@ def process_region(page_no, half, region, cfg=None):
             "tables": [{"caption": clean_text(t["caption"]), "markdown": clean_text(t["markdown"]), "lossy": t["lossy"],
                         "status": t["status"], "source": t["source"], "bbox": [round(v, 1) for v in t["bbox"]],
                         **({"group_label": t["group_label"]} if t.get("group_label") else {})} for t in tables],
-            "figure_lines": fig, "_bbox": region.bbox}
+            "figure_lines": fig, "footnotes": {"inlined": n_fn, "unmatched": n_fn_unmatched}, "_bbox": region.bbox}
 
 
 def remove_repeated(records, min_ratio=0.3, min_count=3, edge=3):

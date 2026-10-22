@@ -84,6 +84,31 @@ def test_verify_passes_answer_citing_without_pdf():
     assert verify_answer("365로 나눠요 (07_대고객환매조건부매매약관 p.1)", "answer", [], ctx) == []
 
 
+FX = "15_유사해외통화선물(FX Margin Trading) 거래약관.pdf"
+
+
+def test_filename_with_parentheses():
+    """F14 남은 경우 (R5 POS052): 파일명 자체에 괄호가 있으면 출처 괄호가 안쪽에서 끊겨 '15' 가 본문 숫자로 잡혔다.
+    실제 파일 이름(citations·검색 결과)을 본문에서 먼저 지우고 검사한다."""
+    ans = "증거금은 거래 전에 내야 해요 (15_유사해외통화선물(FX Margin Trading) 거래약관 p.3)"
+    assert M.unsupported_numbers(ans, "증거금을 예탁") == ["15"]                      # 파일 이름을 모르면 예전처럼 잡힘
+    assert M.unsupported_numbers(ans, "증거금을 예탁", files=[FX]) == []
+    assert M.parse_citations(ans, [], files=[FX]) == [(FX, 3)]
+    assert M.parse_citations(ans, [{"file": FX, "page": 3}]) == [(FX, 3)]            # citations 의 파일 이름도 씀
+    # 출처 괄호 밖에서 파일 이름만 말해도 파일 번호는 검사하지 않음, 다른 숫자는 그대로 검사
+    assert M.unsupported_numbers(f"{FX[:-4]}에 따르면 한도 700만원 (a.pdf p.1)", "한도 600만원", files=[FX]) == ["700"]
+    # 이름이 겹치면 긴 것부터: 'a_1' 이 'a_12' 를 쪼개지 않음
+    assert M.parse_citations("(a_12 p.2)", [], files=["a_1.pdf", "a_12.pdf"]) == [("a_12.pdf", 2)]
+
+
+def test_verify_passes_filename_with_parentheses():
+    from src.agent.verify import verify_answer
+    ctx = [{"file": FX, "pages": [3], "text": "증거금을 예탁하여야 한다"}]
+    ans = "증거금을 먼저 맡겨야 해요 (15_유사해외통화선물(FX Margin Trading) 거래약관 p.3)"
+    assert verify_answer(ans, "answer", [], ctx) == []
+    assert verify_answer(ans, "answer", [{"file": FX, "page": 3}], ctx) == []
+
+
 @pytest.mark.parametrize("m,want", [
     ({"expected5": "answer", "pred5": "answer", "id_hit5": 0.0, "score": 2}, "retrieval_fail"),
     ({"expected5": "answer", "pred5": "abstain", "id_hit5": 1.0, "score": 0}, "wrong_refusal"),

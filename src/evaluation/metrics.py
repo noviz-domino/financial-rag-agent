@@ -23,14 +23,30 @@ def _pdf_name(name: str) -> str:
     return name if name.lower().endswith(".pdf") else name + ".pdf"
 
 
-def _cite_groups(answer: str):
-    """본문의 출처 괄호마다 (span, [(파일, 쪽)]). 파일 이름처럼 보이는 것('.pdf' 나 '_' 포함)만 출처로 본다."""
+def _mask_files(text: str, files) -> tuple[str, dict]:
+    """본문 속 실제 파일 이름을 숫자 없는 자리표시자(__Fb__ 등)로 바꾼다 → (바꾼 글, {자리표시자: 파일명}).
+    파일명 자체의 괄호·숫자('15_유사해외통화선물(FX Margin Trading) 거래약관') 때문에 출처 괄호가 끊기거나
+    파일 번호가 본문 숫자로 잡히는 것을 막음 (F14, R5 POS052). 긴 이름부터 바꿔 겹치는 이름을 지킨다."""
+    names = {}
+    stems = sorted({_pdf_name(f)[:-4] for f in files or () if f and f.strip()}, key=len, reverse=True)
+    for i, stem in enumerate(stems):
+        tok = "__F" + "".join(chr(97 + int(c)) for c in str(i)) + "__"
+        new = re.sub(re.escape(stem) + r"(?:\.pdf)?", tok, text or "", flags=re.I)
+        if new != text:
+            names[tok], text = stem + ".pdf", new
+    return text or "", names
+
+
+def _cite_groups(answer: str, names: dict | None = None):
+    """본문의 출처 괄호마다 (span, [(파일, 쪽)]). 파일 이름처럼 보이는 것('.pdf' 나 '_' 포함)만 출처로 본다.
+    names 는 _mask_files 의 자리표시자 → 파일명 (answer 는 이미 바꾼 글)."""
+    names = names or {}
     for m in CITE_GROUP_RE.finditer(answer or ""):
         items = []
         for part in re.split(r"[,;]", m.group(1)):
             im = CITE_ITEM_RE.match(part)
             if im and (".pdf" in im.group(1).lower() or "_" in im.group(1)):
-                items.append((_pdf_name(im.group(1)), int(im.group(2))))
+                items.append((names.get(im.group(1), _pdf_name(im.group(1))), int(im.group(2))))
         if items:
             yield m.span(), items
 
@@ -92,12 +108,14 @@ def rule_contains(answer: str, items: list[str]) -> dict:
 
 
 # ------------------------------------------------------------------ 인용
-def parse_citations(answer: str, citations: list[dict]) -> list[tuple]:
-    """(파일, 쪽) 목록: 답변 JSON 의 citations + 본문 '(파일명 p.N)' 표기, 중복 제거."""
+def parse_citations(answer: str, citations: list[dict], files=()) -> list[tuple]:
+    """(파일, 쪽) 목록: 답변 JSON 의 citations + 본문 '(파일명 p.N)' 표기, 중복 제거.
+    files: 실제 파일 이름(검색 결과 등). citations 의 파일과 함께 본문에서 한 덩어리로 알아본다."""
     out = []
     for c in citations or []:
         out.append((_pdf_name(c["file"]), int(c["page"])))
-    for _, items in _cite_groups(answer):
+    masked, names = _mask_files(answer, [c["file"] for c in citations or []] + list(files))
+    for _, items in _cite_groups(masked, names):
         out.extend(items)
     return list(dict.fromkeys(out))
 
@@ -112,11 +130,14 @@ def citation_metrics(cites: list[tuple], retrieved: list[dict], exp_pages: set) 
     return res
 
 
-def unsupported_numbers(answer: str, context: str, question: str = "") -> list[str]:
-    """답변 속 숫자 중 근거 글(과 질문)에 없는 것 — 환각 규칙 검사. 출처 괄호(파일명 앞 번호 포함)와 'p.N' 은 제외."""
-    body = answer or ""
-    for (s, e), _ in reversed(list(_cite_groups(body))):
+def unsupported_numbers(answer: str, context: str, question: str = "", files=()) -> list[str]:
+    """답변 속 숫자 중 근거 글(과 질문)에 없는 것 — 환각 규칙 검사. 출처 괄호(파일명 앞 번호 포함)와 'p.N' 은 제외.
+    files: 실제 파일 이름(답변 citations·검색 결과). 본문에서 먼저 지워 파일명 속 숫자·괄호를 검사하지 않는다 (F14)."""
+    body, names = _mask_files(answer, files)
+    for (s, e), _ in reversed(list(_cite_groups(body, names))):
         body = body[:s] + body[e:]
+    for tok in names:
+        body = body.replace(tok, " ")
     body = re.sub(r"\bp\.\s*\d+", "", body)
     ref = {re.sub(r"[,.]", "", n) for n in NUM_RE.findall((context or "") + " " + (question or ""))}
     out = []
