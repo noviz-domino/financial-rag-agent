@@ -216,6 +216,12 @@ pdfplumber 기본 `extract_text()`는 쪽 전체를 위→아래로 읽어서, �
 - 근거에 없는 숫자 금지, 투자 권유 금지
 - Agent: **검색 먼저 → 검색 결과를 보고 한 번에 판단** (D34). 끝내는 조건: 재검색 최대 2번, 재작성 최대 1번, AI 호출 최대 7번. 구조도는 [`docs/agent_graph.md`](docs/agent_graph.md) (설명판: [`docs/agent_구조도.md`](docs/agent_구조도.md))
 
+#### Agent 플로우차트
+
+![Financial RAG Agent 플로우차트](docs/agent_flowchart.svg)
+
+원본 SVG: [`docs/agent_flowchart.svg`](docs/agent_flowchart.svg)
+
 ---
 
 ## 4. 평가
